@@ -13,7 +13,7 @@ pip install mccepy
 ### Source
 
 ```bash
-git clone git@github.com:hazy/mccepy.git
+git clone git@github.com:NorskRegnesentral/mccepy.git
 cd mccepy
 pip install -r requirements.txt
 python setup.py install

@@ -3,13 +3,8 @@ import numpy as np
 import pandas as pd
 
 from cart import CARTMethod
-from sample import SampleMethod
 from metrics import get_delta, d1_distance, d2_distance, yNN, feasibility, redundancy, constraint_violation
 
-
-METHODS_MAP = {'sample': SampleMethod,
-               'cart': CARTMethod,
-               }
 
 class MCCE:
     def __init__(self,
@@ -48,8 +43,8 @@ class MCCE:
         self.visited_columns = [col for col in self.df_columns if col in self.visit_sequence]
         self.visit_sequence = pd.Series([self.visit_sequence.index(col) for col in self.visited_columns], index=self.visited_columns)
 
-        # create list of methods where 'sample' is used for the fixed features and 'cart' otherwise
-        self.method = ['sample'] * self.n_fixed
+        # create list of methods to use - currently only cart implemented
+        self.method = ['cart'] * self.n_fixed
         for _ in range(self.n_mutable):
             self.method.append('cart')
         self.method = pd.Series(self.method, index=self.df_columns)
@@ -73,7 +68,7 @@ class MCCE:
         self.predictor_matrix_columns = self.predictor_matrix.columns.to_numpy()
         for col, _ in self.visit_sequence.sort_values().iteritems():
             # initialise the method
-            col_method = METHODS_MAP[self.method[col]](dtype=self.df_dtypes[col], random_state=self.seed)
+            col_method = CARTMethod(dtype=self.df_dtypes[col], random_state=self.seed)
             # fit the method
             col_predictors = self.predictor_matrix_columns[self.predictor_matrix.loc[col].to_numpy() == 1]
             col_method.fit(X_df=df[col_predictors], y_df=df[col])

@@ -33,7 +33,7 @@ Download the [US adult census dataset](https://github.com/hazy/synthpop/blob/mas
 ```Python
 from data import Data
 
-names=['age', 'workclass', 'fnlwgt', 'degree', 'education_years', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'capital-gain', 'capital-loss', \
+names = ['age', 'workclass', 'fnlwgt', 'degree', 'education_years', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'capital-gain', 'capital-loss', \
        'hours', 'country', 'income']
 dtypes = {"age": "float", "workclass": "category", "fnlwgt": "float", "degree": "category", "education_years": "float", "marital-status": "category", \
           "occupation": "category", "relationship": "category", "race": "category", "sex": "category", "capital-gain": "float", "capital-loss": "float", \
@@ -48,12 +48,13 @@ data = Data(path=path, names=names, dtypes=dtypes, response=response, fixed_feat
 
 
 ```Python
+from sklearn.ensemble import RandomForestClassifier
+
 X = data.df[data.cont_feat + data.cat_feat]
 y = data.df[data.response]
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=42)
 clf = RandomForestClassifier(max_depth=None, random_state=0)
-model = clf.fit(X_train, y_train)
+model = clf.fit(X, y)
 
 # Replace the response with the predicted response
 data.df[data.response] = clf.predict(X)

@@ -4,12 +4,6 @@ Python package to generate counterfactuals using [Monte Carlo sampling of realis
 
 ## Installation
 
-### pip
-
-```bash
-pip install mccepy
-```
-
 ### Source
 
 ```bash

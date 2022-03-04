@@ -1,5 +1,5 @@
 # mccepy
-Python package to generate counterfactuals using Monte Carlo sampling of realistic counterfactual explanations ([MCCE])(https://arxiv.org/pdf/2111.09790.pdf).
+Python package to generate counterfactuals using [Monte Carlo sampling of realistic counterfactual explanations](https://arxiv.org/pdf/2111.09790.pdf).
 
 
 ## Installation

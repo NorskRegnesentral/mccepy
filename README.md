@@ -44,7 +44,7 @@ fixed_features = ['age', 'sex']
 data = Data(path=path, names=names, dtypes=dtypes, response=response, fixed_features=fixed_features)
 ```
 
-2. Fit a predictive model e.g., random forest to predict response based on all features. For example:
+2. Fit a predictive model e.g., random forest to predict response based on all features. For example
 
 
 ```Python
@@ -62,7 +62,7 @@ df = data.df
 
 ```
 
-3. Decide which customers to generated counterfactual explanations for
+3. Decide which customers to generate counterfactual explanations for
 
 ```Python
 test_idx = df[df[data.response]==0].index # unhappy customers have response 0
@@ -73,14 +73,14 @@ test = data.df.loc[test_idx][0:n_test]
 
 ```
 
-4. Fit MCCE object and generate counterfactual explanations using MCCE method and CART method
+4. Fit MCCE object and generate counterfactual explanations using CART
 
 ```Python
 from mcce import MCCE
 
 mcce = MCCE(fixed_features=data.fixed_features, model=model)
 mcce.fit(data.df[data.features], dtypes)
-synth_df = mcce.generate(test[data.features], k=500) # 10000 takes a long time -- time it?
+synth_df = mcce.generate(test[data.features], k=500)
 
 ```
 

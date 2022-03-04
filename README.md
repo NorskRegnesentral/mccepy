@@ -69,23 +69,23 @@ df = data.df
 ```Python
 test_idx = df[df[data.response]==0].index # unhappy customers have response 0
 
-# Choose first three test observations 
+# Choose first three unhappy customers 
 n_test = 3
 test = data.df.loc[test_idx][0:n_test]
 
 ```
 
-4. Fit MCCE object and generate counterfactual explanations using CART
+4. Initialize MCCE object and generate counterfactual explanations using CART
 
 ```Python
 from mcce import MCCE
 
 mcce = MCCE(fixed_features=data.fixed_features, model=model)
 
-# Fit CART model based and condition on fixed_features
+# Fit CART models iteratively while always conditioning on fixed_features
 mcce.fit(data.df[data.features], dtypes)
 
-# Generate 500 observations for each test observation
+# Generate 500 counterfactual explanations for each test observation
 synth_df = mcce.generate(test[data.features], k=500)
 
 ```
@@ -93,7 +93,7 @@ synth_df = mcce.generate(test[data.features], k=500)
 5. Postprocess generated counterfactuals
 
 ```Python
-# This step removes all generated observations that are not valid and computes metrics like distance, feasibility, and redundancy
+# This step removes all generated explanations that are not valid and computes metrics like distance, feasibility, and redundancy
 mcce.postprocess(data.df, synth_df, test, data.response, scaler=data.scaler)
 
 # print all generated rows with metrics as additional columns 

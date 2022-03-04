@@ -86,5 +86,13 @@ mcce.postprocess(data.df, synth_df, test, data.response, scaler=data.scaler)
 results_all = mcce.results
 results = mcce.results_sparse
 
+workclass  degree  marital-status  occupation  relationship  race  sex  country   age    fnlwgt  education_years  capital-gain  capital-loss  hours  income
+0          0       0               1           0             1     1    1        1  50.0   83311.0             13.0           0.0           0.0   13.0       0
+1          1       1               0           0             0     1    1        1  38.0  215646.0              9.0           0.0           0.0   40.0       0
+2          1       0               1           0             1     0    1        1  53.0  234721.0              7.0           0.0           0.0   40.0       0
+  workclass degree marital-status occupation relationship race sex country   age    fnlwgt  education_years  capital-gain  capital-loss  hours income   L0        L2       yNN  feasibility redundancy violation
+0         0      0              1          0            0    1   1       1  50.0  138370.0             13.0           0.0           0.0   60.0      1  3.0  5.328109  0.999692     1.057664          2         0
+1         1      1              0          1            0    1   1       1  38.0  315640.0             10.0           0.0           0.0   40.0      1  3.0  2.336079  0.999692     1.356356          2         0
+2         1      0              1          0            0    0   1       1  53.0  261584.0             13.0           0.0           0.0   40.0      1  3.0  3.586717  1.000000     1.234961          2         
 ```
 

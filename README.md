@@ -34,8 +34,7 @@ Download the [US adult census dataset](https://github.com/hazy/synthpop/blob/mas
 from data import Data
 
 names = ['age', 'workclass', 'fnlwgt', 'degree', 'education_years', 'marital-status', 'occupation', 'relationship', 'race', '
-         'sex', 'capital-gain', 'capital-loss', \
-       'hours', 'country', 'income']
+         'sex', 'capital-gain', 'capital-loss', 'hours', 'country', 'income']
 dtypes = {"age": "float", "workclass": "category", "fnlwgt": "float", "degree": "category", "education_years": "float", '
           "marital-status": "category", "occupation": "category", "relationship": "category", "race": "category", '
           "sex": "category", "capital-gain": "float", "capital-loss": "float", \

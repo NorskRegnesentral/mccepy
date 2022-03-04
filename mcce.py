@@ -72,8 +72,6 @@ class MCCE:
         # train
         self.predictor_matrix_columns = self.predictor_matrix.columns.to_numpy()
         for col, _ in self.visit_sequence.sort_values().iteritems():
-            print('train_{}'.format(col))
-
             # initialise the method
             col_method = METHODS_MAP[self.method[col]](dtype=self.df_dtypes[col], random_state=self.seed)
             # fit the method
@@ -100,7 +98,6 @@ class MCCE:
 
         start_time = time.time()
         for col, _ in self.visit_sequence.sort_values().iteritems():
-            print('generate_{}'.format(col))
 
             # reload the method
             col_method = self.saved_methods[col]
@@ -110,7 +107,7 @@ class MCCE:
 
             # map dtype to original dtype
             synth_df[col] = synth_df[col].astype(self.df_dtypes[col])
-            
+
         self.total_generating_seconds = time.time() - start_time
 
         # return in same ordering as original dataframe

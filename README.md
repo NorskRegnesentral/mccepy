@@ -79,7 +79,11 @@ test = data.df.loc[test_idx][0:n_test]
 from mcce import MCCE
 
 mcce = MCCE(fixed_features=data.fixed_features, model=model)
+
+# Fit CART model based and condition on fixed_features
 mcce.fit(data.df[data.features], dtypes)
+
+# Generate 500 observations for each test observation
 synth_df = mcce.generate(test[data.features], k=500)
 
 ```
@@ -87,11 +91,13 @@ synth_df = mcce.generate(test[data.features], k=500)
 5. Postprocess generated counterfactuals
 
 ```Python
+# This step removes all generated observations that are not valid and computes metrics like distance, feasibility, and redundancy
 mcce.postprocess(data.df, synth_df, test, data.response, scaler=data.scaler)
 
-# print results 
+# print all generated rows with metrics as additional columns 
+results_all = mcce.results 
 
-results_all = mcce.results
+# print the best result for each test observation
 results = mcce.results_sparse
 
 workclass  degree  marital-status  occupation  relationship  race  sex  country   age    fnlwgt  education_years  capital-gain  capital-loss  hours  income

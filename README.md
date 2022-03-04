@@ -23,7 +23,7 @@ python setup.py install
 
 
 ### Adult dataset
-Download the adult dataset [US adult census dataset](https://github.com/hazy/synthpop/blob/master/datasets/README.md). Add the dataset to a local repository. 
+Download the [US adult census dataset](https://github.com/hazy/synthpop/blob/master/datasets/README.md). Add the dataset to a local repository. 
 
 
 ### mcce
@@ -32,6 +32,12 @@ Download the adult dataset [US adult census dataset](https://github.com/hazy/syn
 
 ```Python
 from data import Data
+
+names=['age', 'workclass', 'fnlwgt', 'degree', 'education_years', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'capital-gain', 'capital-loss', 'hours', 'country', 'income']
+fixed_features = ['age', 'sex']
+response = 'income'
+dtypes = {"age": "float", "workclass": "category", "fnlwgt": "float", "degree": "category", "education_years": "float", "marital-status": "category", "occupation": "category", "relationship": "category", "race": "category", "sex": "category", "capital-gain": "float", "capital-loss": "float", "hours": "float", "country": "category", "income": "category"}
+
 
 data = Data(path=path, names=names, dtypes=dtypes, response=response, fixed_features=fixed_features)
 ```

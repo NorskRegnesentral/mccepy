@@ -3,8 +3,11 @@ import numpy as np
 import pandas as pd
 
 from cart import CARTMethod
+from sample import SampleMethod
 from metrics import get_delta, d1_distance, d2_distance, yNN, feasibility, redundancy, constraint_violation
 
+
+METHODS_MAP = {'cart': CARTMethod, 'sample': SampleMethod}
 
 class MCCE:
     def __init__(self,
@@ -35,7 +38,10 @@ class MCCE:
         self.n_fixed, self.n_mutable = len(self.fixed_features), len(self.mutable_features)
         
         # column indices of mutable features
-        self.visit_sequence = [index for index, col in enumerate(self.df_columns) if (col in self.mutable_features)]
+        self.visit_sequence = [index for index, col in enumerate(self.df_columns) if (col in self.fixed_features)] # if (col in self.mutable_features)
+        for index, col in enumerate(self.df_columns):
+            if col in self.mutable_features:
+                self.visit_sequence.append(index)
 
         # convert indices to column names
         self.visit_sequence = [self.df_columns[i] for i in self.visit_sequence]
@@ -44,11 +50,13 @@ class MCCE:
         self.visit_sequence = pd.Series([self.visit_sequence.index(col) for col in self.visited_columns], index=self.visited_columns)
 
         # create list of methods to use - currently only cart implemented
-        self.method = ['cart'] * self.n_fixed
-        for _ in range(self.n_mutable):
-            self.method.append('cart')
+        self.method = []
+        for col in self.visited_columns:
+            if col in self.fixed_features:
+                self.method.append('sample') # these will be fit but not sampled 
+            else:
+                self.method.append('cart')
         self.method = pd.Series(self.method, index=self.df_columns)
-
 
         # predictor_matrix_validator:
         self.predictor_matrix = np.zeros([len(self.visit_sequence), len(self.visit_sequence)], dtype=int)
@@ -68,9 +76,11 @@ class MCCE:
         self.predictor_matrix_columns = self.predictor_matrix.columns.to_numpy()
         for col, _ in self.visit_sequence.sort_values().iteritems():
             # initialise the method
-            col_method = CARTMethod(dtype=self.df_dtypes[col], random_state=self.seed)
+            col_method = METHODS_MAP[self.method[col]](dtype=self.df_dtypes[col], random_state=self.seed)
+            
             # fit the method
             col_predictors = self.predictor_matrix_columns[self.predictor_matrix.loc[col].to_numpy() == 1]
+            
             col_method.fit(X_df=df[col_predictors], y_df=df[col])
             # save the method
             self.saved_methods[col] = col_method
@@ -82,24 +92,21 @@ class MCCE:
 
         # create data set with the fixed features repeated k times
         synth_df = test[self.fixed_features]
-        synth_df = pd.concat([synth_df]*self.k)
+        synth_df = pd.concat([synth_df] * self.k)
         synth_df.sort_index(inplace=True)
 
-        # repeat fixed features k times
-        synth_df_mutable = pd.DataFrame(data=np.zeros([self.k*n_test, self.n_mutable]), columns=self.mutable_features, index=synth_df.index)
+        # repeat 0 for mutable features k times
+        synth_df_mutable = pd.DataFrame(data=np.zeros([self.k * n_test, self.n_mutable]), columns=self.mutable_features, index=synth_df.index)
 
         synth_df = pd.concat([synth_df, synth_df_mutable], axis=1)
 
-
         start_time = time.time()
-        for col, _ in self.visit_sequence.sort_values().iteritems():
-
+        for col in self.mutable_features: #self.visit_sequence.sort_values().iteritems():
             # reload the method
             col_method = self.saved_methods[col]
             # predict with the method
             col_predictors = self.predictor_matrix_columns[self.predictor_matrix.loc[col].to_numpy() == 1]
             synth_df[col] = col_method.predict(synth_df[col_predictors])
-
             # map dtype to original dtype
             synth_df[col] = synth_df[col].astype(self.df_dtypes[col])
 
@@ -109,12 +116,13 @@ class MCCE:
         synth_df = synth_df[test.columns]
         return synth_df
 
-    def postprocess(self, data, synth, test, response, scaler=None):
+    def postprocess(self, data, synth, test, response, scaler=None, cutoff=0.5):
 
         # predict response of generated data
         synth[response] = self.model.predict(synth)
-        synth_positive = synth[synth[response]==1] # drop negative responses
-
+        synth_positive = synth[synth[response]>=cutoff] # drop negative responses
+        
+        
         # duplicate original test observations N times where N is number of positive counterfactuals
         n_counterfactuals = synth_positive.groupby(synth_positive.index).size()
         n_counterfactuals = pd.DataFrame(n_counterfactuals, columns = ['N'])
@@ -176,8 +184,10 @@ class MCCE:
         redund = redundancy(synth, test, model, response)
         synth_metrics['redundancy'] = redund
 
+        # 6) Success
+        synth_metrics['success'] = 1
 
-        # 6) Violation
+        # 7) Violation
         con_vio = constraint_violation(synth, test, self.cont_feat, self.fixed_features, scaler)
         synth_metrics['violation'] = con_vio
 

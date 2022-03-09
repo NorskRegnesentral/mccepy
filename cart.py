@@ -4,14 +4,12 @@ from method import Method
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 
 
-NUM_COLS_DTYPES = ['int', 'float', 'datetime']
+NUM_COLS_DTYPES = ['int', 'float', 'datetime', 'float64']
 CAT_COLS_DTYPES = ['category', 'bool']
 
 class CARTMethod(Method):
     def __init__(self, dtype, minibucket=5, random_state=None, *args, **kwargs):
         self.dtype = dtype
-        # self.smoothing = smoothing
-        # self.proper = proper
         self.minibucket = minibucket
         self.random_state = random_state
 
@@ -21,9 +19,7 @@ class CARTMethod(Method):
             self.cart = DecisionTreeRegressor(min_samples_leaf=self.minibucket, random_state=self.random_state)
 
     def fit(self, X_df, y_df):
-        # if self.proper:
-        #     X_df, y_df = proper(X_df=X_df, y_df=y_df, random_state=self.random_state)
-
+        
         X_df, y_df = self.prepare_dfs(X_df=X_df, y_df=y_df, normalise_num_cols=False, one_hot_cat_cols=True)
         if self.dtype in NUM_COLS_DTYPES:
             self.y_real_min, self.y_real_max = np.min(y_df), np.max(y_df)
@@ -49,8 +45,5 @@ class CARTMethod(Method):
         leaves_pred_index_dict = leaves_pred_index_df.groupby('leaves_pred').apply(lambda x: x.to_numpy()[:, -1]).to_dict()
         for leaf, indices in leaves_pred_index_dict.items():
             y_pred[indices] = np.random.choice(self.leaves_y_dict[leaf], size=len(indices), replace=True)
-
-        # if self.smoothing and self.dtype in NUM_COLS_DTYPES:
-        #     y_pred = smooth(self.dtype, y_pred, self.y_real_min, self.y_real_max)
 
         return y_pred

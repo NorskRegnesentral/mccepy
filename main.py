@@ -1,3 +1,4 @@
+
 from sklearn import  metrics
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
@@ -45,8 +46,12 @@ test = data.df.loc[test_idx][0:n_test]
 
 # (3) Fit MCCE object
 mcce = MCCE(fixed_features=data.fixed_features, model=model)
+# print(data.df[data.features])
+
 mcce.fit(data.df[data.features], dtypes)
-synth_df = mcce.generate(test[data.features], k=500) # 10000 takes a long time -- time it?
+synth_df = mcce.generate(test[data.features], k=500)
+
+# ----------------------
 
 
 # (4) Postprocess generated counterfactuals
@@ -62,6 +67,6 @@ test[data.cont_feat] = data.scaler.inverse_transform(test[data.cont_feat])
 results[data.cont_feat] = data.scaler.inverse_transform(results[data.cont_feat])
 
 
-# print(results_all.head(5))
+print(results_all.head(5))
 print(test[~test.index.duplicated(keep='first')])
 print(results)

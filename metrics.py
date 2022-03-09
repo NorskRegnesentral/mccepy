@@ -21,7 +21,7 @@ def get_delta(instance: np.ndarray, cf: np.ndarray):
 
 def d1_distance(delta: np.ndarray): # L0 norm
     """
-    Computes D1 distance
+    Computes Sparsity
     Parameters
     ----------
     delta: np.ndarray
@@ -50,7 +50,7 @@ def d2_distance(delta: np.ndarray): # L1 norm
 
 def d3_distance(delta: np.ndarray): # L2 norm
     """
-    Computes D3 distance
+    Computes Euclidean distance
     Parameters
     ----------
     delta: np.ndarray

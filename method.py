@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from abc import ABC, abstractmethod
 
-NUM_COLS_DTYPES = ['int', 'float', 'datetime']
+NUM_COLS_DTYPES = ['int', 'float', 'datetime', 'float64']
 CAT_COLS_DTYPES = ['category', 'bool']
 
 

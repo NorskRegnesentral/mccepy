@@ -17,12 +17,12 @@ python setup.py install
 
 
 ### Adult dataset
-Download the [US adult census dataset](https://github.com/hazy/synthpop/blob/master/datasets/README.md). Add the dataset to a local repository. 
+Download the [US adult census dataset](https://archive.ics.uci.edu/ml/datasets/adult). Add the dataset to a local repository and save the path to the data. 
 
 
 ### mcce
 
-1. Initialize data object with path to the data file, column names, feature types, response name, and a list of fixed features. 
+1. Initialize Data object with path to the data file, column names, feature types, response name, and a list of fixed features. 
 
 ```Python
 from data import Data
@@ -52,7 +52,7 @@ clf = RandomForestClassifier(max_depth=None, random_state=0)
 model = clf.fit(X, y)
 
 # Replace the response with the predicted response
-data.df[data.response] = clf.predict(X)
+data.df[data.response] = clf.predict_proba(X)[:,1]
 
 df = data.df
 
@@ -61,7 +61,8 @@ df = data.df
 3. Decide which customers to generate counterfactual explanations for
 
 ```Python
-test_idx = df[df[data.response]==0].index # unhappy customers have response 0
+cutoff = 0.5
+test_idx = df[df[data.response]<cutoff].index # unhappy customers have response 0
 
 # Choose first three unhappy customers 
 n_test = 3
@@ -88,7 +89,7 @@ synth_df = mcce.generate(test[data.features], k=500)
 
 ```Python
 # This step removes all generated explanations that are not valid and computes metrics like distance, feasibility, and redundancy
-mcce.postprocess(data.df, synth_df, test, data.response, scaler=data.scaler)
+mcce.postprocess(data.df, synth_df, test, data.response, scaler=data.scaler, cutoff=cutoff)
 
 # print all generated rows with metrics as additional columns 
 results_all = mcce.results 
@@ -97,16 +98,16 @@ results_all = mcce.results
 results = mcce.results_sparse
 
 # Original test observation features and predicted response ('income')
-   workclass  degree  marital-status  occupation  relationship  race  sex  country   age    fnlwgt  education_years  capital-gain  capital-loss  hours  income
-0          0       0               1           0             1     1    1        1  50.0   83311.0             13.0           0.0           0.0   13.0       0
-1          1       1               0           0             0     1    1        1  38.0  215646.0              9.0           0.0           0.0   40.0       0
-2          1       0               1           0             1     0    1        1  53.0  234721.0              7.0           0.0           0.0   40.0       0
-  
-  
-# The best counterfactual generated for the three test observations
-  workclass degree marital-status occupation relationship race sex country   age    fnlwgt  education_years  capital-gain  capital-loss  hours income   L0        L2       yNN  feasibility redundancy violation
-0         0      0              1          0            0    1   1       1  50.0  138370.0             13.0           0.0           0.0   60.0      1  3.0  5.328109  0.999692     1.057664          2         0
-1         1      1              0          1            0    1   1       1  38.0  315640.0             10.0           0.0           0.0   40.0      1  3.0  2.336079  0.999692     1.356356          2         0
-2         1      0              1          0            0    0   1       1  53.0  261584.0             13.0           0.0           0.0   40.0      1  3.0  3.586717  1.000000     1.234961          2         
+    workclass  degree  marital-status  occupation  relationship  race  sex  country   age    fnlwgt  education_years  capital-gain  capital-loss  hours  income
+0          0       0               1           0             1     1    1        1  50.0   83311.0             13.0           0.0           0.0   13.0    0.07
+1          1       1               0           0             0     1    1        1  38.0  215646.0              9.0           0.0           0.0   40.0    0.00
+2          1       0               1           0             1     0    1        1  53.0  234721.0              7.0           0.0           0.0   40.0    0.00
+
+# Best counterfactual example for all three test observations
+  workclass degree marital-status occupation relationship race sex country   age    fnlwgt  education_years  capital-gain  capital-loss  hours income   L0        L2       yNN  feasibility redundancy success violation
+0         0      0              1          0            0    1   1       0  50.0  120781.0             13.0           0.0           0.0   30.0      1  4.0  3.731809  0.999831     1.428615          3       1         0
+1         1      1              0          1            0    1   1       1  38.0  123983.0             13.0           0.0           0.0   40.0      1  3.0  3.423253  0.999560     1.118427          2       1         0
+2         1      0              1          0            0    0   1       0  53.0  304570.0             10.0           0.0           0.0   40.0      1  4.0  3.827878  0.999374     1.233153          2       1         0
+
 ```
 

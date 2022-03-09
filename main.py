@@ -1,11 +1,15 @@
 
 from sklearn import  metrics
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
 
 from mcce import MCCE
 from data import Data
 
+# Download data: https://archive.ics.uci.edu/ml/datasets/adult
+# Call file Adult_income.csv
+# Save in a folder and define path as pointing to data
+
+print("Loading data...")
 path = "~/pkg/MCCE/Datasets/Adult/Adult_income.csv"
 names=['age', 'workclass', 'fnlwgt', 'degree', 'education_years', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'capital-gain', 'capital-loss', 'hours', 'country', 'income']
 fixed_features = ['age', 'sex']
@@ -17,27 +21,18 @@ data = Data(path=path, names=names, dtypes=dtypes, response=response, fixed_feat
 
 # (1) Fit predictive model
 X = data.df[data.cont_feat + data.cat_feat]
-y = data.df[data.response]
+y = data.df[data.response] # 1 = income >= 50K, 0 = income < 50K
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=42)
 clf = RandomForestClassifier(max_depth=None, random_state=0)
-model = clf.fit(X_train, y_train)
+model = clf.fit(X, y)
 
-pred_train = model.predict(X_train)
-pred_test = model.predict(X_test)
-
-fpr, tpr, _ = metrics.roc_curve(y_train, pred_train, pos_label=1)
-train_auc = metrics.auc(fpr, tpr)
-
-fpr, tpr, _ = metrics.roc_curve(y_test, pred_test, pos_label=1)
-test_auc = metrics.auc(fpr, tpr)
-
-data.df[data.response] = clf.predict(X)
+data.df[data.response] = clf.predict_proba(X)[:,1]
 
 df = data.df
 
 # (2) Find unhappy customers
-test_idx = df[df[data.response]==0].index # unhappy customers
+cutoff = 0.5
+test_idx = df[df[data.response]<cutoff].index # unhappy customers
 
 # Decide which observations deserve counterfactuals
 n_test = 3
@@ -45,16 +40,14 @@ test = data.df.loc[test_idx][0:n_test]
 
 
 # (3) Fit MCCE object
+print("Fitting MCCE model...")
 mcce = MCCE(fixed_features=data.fixed_features, model=model)
-# print(data.df[data.features])
-
 mcce.fit(data.df[data.features], dtypes)
+print("Generating counterfactuals with MCCE...")
 synth_df = mcce.generate(test[data.features], k=500)
 
-# ----------------------
-
-
 # (4) Postprocess generated counterfactuals
+print("Postprocessing counterfactuals with MCCE...")
 mcce.postprocess(data.df, synth_df, test, data.response, scaler=data.scaler)
 
 # (5) Print results 
@@ -66,7 +59,13 @@ results_all[data.cont_feat] = data.scaler.inverse_transform(results_all[data.con
 test[data.cont_feat] = data.scaler.inverse_transform(test[data.cont_feat])
 results[data.cont_feat] = data.scaler.inverse_transform(results[data.cont_feat])
 
-
+# Print generated data with metrics
 print(results_all.head(5))
+
+# Print original test observations
+print("Original test observation...\n")
 print(test[~test.index.duplicated(keep='first')])
+
+# Print best counterfactual explanations
+print("Best counterfactuals for each test observation using MCCE...\n")
 print(results)

@@ -4,12 +4,6 @@ Python package to generate counterfactuals using [Monte Carlo sampling of realis
 
 ## Installation
 
-### pip
-
-```bash
-pip install mccepy
-```
-
 ### Source
 
 ```bash
@@ -33,10 +27,11 @@ Download the [US adult census dataset](https://github.com/hazy/synthpop/blob/mas
 ```Python
 from data import Data
 
-names=['age', 'workclass', 'fnlwgt', 'degree', 'education_years', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'capital-gain', 'capital-loss', \
-       'hours', 'country', 'income']
-dtypes = {"age": "float", "workclass": "category", "fnlwgt": "float", "degree": "category", "education_years": "float", "marital-status": "category", \
-          "occupation": "category", "relationship": "category", "race": "category", "sex": "category", "capital-gain": "float", "capital-loss": "float", \
+names = ['age', 'workclass', 'fnlwgt', 'degree', 'education_years', 'marital-status', 'occupation', 'relationship', 'race', '
+         'sex', 'capital-gain', 'capital-loss', 'hours', 'country', 'income']
+dtypes = {"age": "float", "workclass": "category", "fnlwgt": "float", "degree": "category", "education_years": "float", '
+          "marital-status": "category", "occupation": "category", "relationship": "category", "race": "category", '
+          "sex": "category", "capital-gain": "float", "capital-loss": "float", \
           "hours": "float", "country": "category", "income": "category"}
 response = 'income'
 fixed_features = ['age', 'sex']
@@ -48,12 +43,13 @@ data = Data(path=path, names=names, dtypes=dtypes, response=response, fixed_feat
 
 
 ```Python
+from sklearn.ensemble import RandomForestClassifier
+
 X = data.df[data.cont_feat + data.cat_feat]
 y = data.df[data.response]
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=42)
 clf = RandomForestClassifier(max_depth=None, random_state=0)
-model = clf.fit(X_train, y_train)
+model = clf.fit(X, y)
 
 # Replace the response with the predicted response
 data.df[data.response] = clf.predict(X)
@@ -67,23 +63,23 @@ df = data.df
 ```Python
 test_idx = df[df[data.response]==0].index # unhappy customers have response 0
 
-# Choose first three test observations 
+# Choose first three unhappy customers 
 n_test = 3
 test = data.df.loc[test_idx][0:n_test]
 
 ```
 
-4. Fit MCCE object and generate counterfactual explanations using CART
+4. Initialize MCCE object and generate counterfactual explanations using CART
 
 ```Python
 from mcce import MCCE
 
 mcce = MCCE(fixed_features=data.fixed_features, model=model)
 
-# Fit CART model based and condition on fixed_features
+# Fit CART models iteratively while always conditioning on fixed_features
 mcce.fit(data.df[data.features], dtypes)
 
-# Generate 500 observations for each test observation
+# Generate 500 counterfactual explanations for each test observation
 synth_df = mcce.generate(test[data.features], k=500)
 
 ```
@@ -91,7 +87,7 @@ synth_df = mcce.generate(test[data.features], k=500)
 5. Postprocess generated counterfactuals
 
 ```Python
-# This step removes all generated observations that are not valid and computes metrics like distance, feasibility, and redundancy
+# This step removes all generated explanations that are not valid and computes metrics like distance, feasibility, and redundancy
 mcce.postprocess(data.df, synth_df, test, data.response, scaler=data.scaler)
 
 # print all generated rows with metrics as additional columns 

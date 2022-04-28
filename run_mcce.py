@@ -95,7 +95,7 @@ for data_name in args.dataset:
 
     # (4) Postprocess generated counterfactuals
     print("Postprocessing counterfactuals with MCCE...")
-    mcce.postprocess(df, synth_df, test, y_col, scaler=model.scaler, cutoff=0.5)
+    mcce.postprocess(df, synth_df, test, y_col, scaler=model.scaler, cutoff=0.5) # SOMETHING BREAKS HERE?
 
     # (5) Print results 
 

@@ -13,6 +13,8 @@ from carla.evaluation.violations import constraint_violation
 
 from tensorflow import Graph, Session # for CEM and CEM_VAE
 
+print(DataCatalog)
+
 def load_setup():
     with open("experimental_setup.yaml", "r") as f:
         setup_catalog = yaml.safe_load(f)
@@ -159,6 +161,7 @@ for data_name in args.dataset:
 
         distance = pd.DataFrame(distance, columns=['L0', 'L1', 'L2', "L_inf"])
         results_method['L0'] = distance['L0']
+        results_method['L1'] = distance['L1']
         results_method['L2'] = distance['L2']
         results_method['yNN'] = ynn
         results_method['feasibility'] = 0
@@ -209,6 +212,7 @@ for data_name in args.dataset:
 
         distance = pd.DataFrame(distance, columns=['L0', 'L1', 'L2', "L_inf"])
         results_method['L0'] = distance['L0']
+        results_method['L1'] = distance['L1']
         results_method['L2'] = distance['L2']
         results_method['yNN'] = ynn
         results_method['feasibility'] = 0
@@ -267,6 +271,7 @@ for data_name in args.dataset:
 
                 distance = pd.DataFrame(distance, columns=['L0', 'L1', 'L2', "L_inf"])
                 results_method['L0'] = distance['L0']
+                results_method['L1'] = distance['L1']
                 results_method['L2'] = distance['L2']
                 results_method['yNN'] = ynn
                 results_method['feasibility'] = 0
@@ -287,5 +292,5 @@ for data_name in args.dataset:
 recourse_methods_all = '_'.join(args.recourse_method)
 datasets_all = '_'.join(args.dataset)
 
-results_all.to_csv(f"Results/Carla_recourse_method_{recourse_methods_all}_{datasets_all}.csv")
+# results_all.to_csv(f"Results/Carla_recourse_method_{recourse_methods_all}_{datasets_all}.csv")
 

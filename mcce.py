@@ -4,7 +4,8 @@ import pandas as pd
 
 from cart import CARTMethod
 from sample import SampleMethod
-from metrics import get_delta, d1_distance, d2_distance, yNN, feasibility, redundancy, constraint_violation
+# from metrics import get_delta, d1_distance, d2_distance, d3_distance, yNN, feasibility, redundancy, constraint_violation
+from sklearn.neighbors import NearestNeighbors
 
 
 METHODS_MAP = {'cart': CARTMethod, 'sample': SampleMethod}
@@ -135,19 +136,27 @@ class MCCE:
 
         self.test_repeated = test
 
-        self.results = self.calculate_metrics(synth_positive, self.test_repeated, data, self.model, response, scaler)
-
+        self.results = self.calculate_metrics(synth_positive, self.test_repeated, data, self.model, response, scaler) # SOMETHING BREAKS HERE
+        
         # find the best row for each test obs
         results_sparse = pd.DataFrame(columns=self.results.columns)
-
+        # print(results_sparse)
         for idx in list(set(self.results.index)):
             idx_df = self.results.loc[idx]
-            sparse = min(idx_df.L0)
+            if(isinstance(idx_df, pd.DataFrame)): # if you have multiple rows
+                sparse = min(idx_df.L0)
+                sparse_df = idx_df[idx_df.L0 == sparse]
+                closest = min(sparse_df.L2)
+                close_df = sparse_df[sparse_df.L2 == closest]
+                if(close_df.shape[0]>1):
+                    highest_feasibility = max(close_df.feasibility)
+                    close_df = close_df[close_df.feasibility == highest_feasibility].head(1)
 
-            sparse_df = idx_df[idx_df['L0'] == sparse]
-            closest = min(sparse_df.L2)
-            close_df = sparse_df[sparse_df['L2'] == closest]    
-            
+            else: # if you have only one row
+                close_df = idx_df.to_frame().T
+                
+            # print(sparse)
+            # print(close_df)
             results_sparse = pd.concat([results_sparse, close_df], axis=0)
 
         self.results_sparse = results_sparse
@@ -163,32 +172,63 @@ class MCCE:
         factual = test[features].sort_index().to_numpy()
         counterfactuals = synth[features].sort_index().to_numpy()
 
-        delta = get_delta(factual, counterfactuals)
+        delta = factual - counterfactuals # get_delta(factual, counterfactuals)
 
-        d1 = d1_distance(delta) # sparsity
-        d3 = d2_distance(delta) # euclidean distance
+        # d1 = d1_distance(delta) # sparsity
+        # d2 = d2_distance(delta) # sparsity
+        # d3 = d3_distance(delta) # euclidean distance
+
+        d1 = np.sum(delta != 0, axis=1, dtype=float).tolist() # sparsity
+        d2 = np.sum(np.abs(delta), axis=1, dtype=float).tolist() # manhatten distance
+        d3 = np.sum(np.square(np.abs(delta)), axis=1, dtype=np.float).tolist() # euclidean distance
 
         synth_metrics['L0'] = d1
+        synth_metrics['L1'] = d2
         synth_metrics['L2'] = d3
 
         # 3) kNN
-        neighb = yNN(data, synth, response, y=5)
-        synth_metrics['yNN'] = neighb
+        # neighb = yNN(data, synth, response, y=5)
+        # synth_metrics['yNN'] = neighb
 
 
         # 4) Feasibility 
-        feas = feasibility(data, synth, response, y=5)
-        synth_metrics['feasibility'] = feas
+        # feas = feasibility(data, synth, response, y=5)
+        # synth_metrics['feasibility'] = feas
+
+        cols = data.columns
+        cols.drop(response)
+
+        feas_results = []
+        nbrs = NearestNeighbors(n_neighbors=5).fit(synth[cols].values)
+
+        for i, row in synth[cols].iterrows():
+            knn = nbrs.kneighbors(row.values.reshape((1, -1)), 5, return_distance=True)[0]
+            
+            feas_results.append(np.mean(knn))
+
+        synth_metrics['feasibility'] = feas_results
+
 
         # 5) Redundancy 
-        redund = redundancy(synth, test, model, response)
-        synth_metrics['redundancy'] = redund
+        # redund = redundancy(synth, test, model, response)
+        # synth_metrics['redundancy'] = redund
 
         # 6) Success
         synth_metrics['success'] = 1
 
         # 7) Violation
-        con_vio = constraint_violation(synth, test, self.cont_feat, self.fixed_features, scaler)
-        synth_metrics['violation'] = con_vio
+        # con_vio = constraint_violation(synth, test, self.cont_feat, self.fixed_features, scaler)
+        # synth_metrics['violation'] = con_vio
+
+        # test_inverse = scaler(test) # this will have the original feature names
+        # synth_inverse = scaler(synth)
+
+        # print(test_inverse)
+
+        instance = test[self.fixed_features].sort_index().to_numpy()
+        cf = synth[self.fixed_features].to_numpy()
+        delta = cf - instance
+
+        synth_metrics['violation'] = np.sum(delta != 0, axis=1, dtype=np.float).tolist()
 
         return synth_metrics

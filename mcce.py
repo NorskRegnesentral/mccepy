@@ -13,16 +13,29 @@ METHODS_MAP = {'cart': CARTMethod, 'sample': SampleMethod}
 class MCCE:
     def __init__(self,
                  fixed_features=None,
+                 immutables=None,
                  model=None,
-                 scaler=None,
-                 seed=None):
+                 seed=None,
+                 continuous=None,
+                 categorical=None,
+                #  transform=None,
+                #  inverse_transform=None
+                 ):
 
         # initialise arguments
-        self.fixed_features = fixed_features  # features to condition on
+        self.fixed_features = fixed_features  # features to condition on - the ones in the dataset
+
+        if immutables is None:
+            self.immutables = fixed_features
+        else:
+            self.immutables = immutables # features to condition on - the original feature names
         self.seed = seed
         self.model = model  # predictive model
-        self.scaler = scaler #  use to normalize/scale continuous features
-        
+        # self.transform = transform #  use to normalize/scale continuous features
+        # self.inverse_transform = inverse_transform # use to go from normalize/scaled features to original features
+        self.continuous = continuous
+        self.categorical = categorical
+
         self.method = None
         self.visit_sequence = None
         self.predictor_matrix = None
@@ -117,66 +130,71 @@ class MCCE:
         synth_df = synth_df[test.columns]
         return synth_df
 
-    def postprocess(self, data, synth, test, response, scaler=None, cutoff=0.5):
+    def postprocess(self, data, synth, test, response, transform=None, inverse_transform=None, cutoff=0.5):
 
-        # predict response of generated data
+        # Predict response of generated data
         synth[response] = self.model.predict(synth)
         synth_positive = synth[synth[response]>=cutoff] # drop negative responses
         
         
-        # duplicate original test observations N times where N is number of positive counterfactuals
+        # Duplicate original test observations N times where N is number of positive counterfactuals
         n_counterfactuals = synth_positive.groupby(synth_positive.index).size()
         n_counterfactuals = pd.DataFrame(n_counterfactuals, columns = ['N'])
 
-        test = test.join(n_counterfactuals)
-        test.dropna(inplace = True)
+        test_repeated = test.copy()
 
-        test = test.reindex(test.index.repeat(test.N))
-        test.drop(['N'], axis=1, inplace=True)
+        test_repeated = test_repeated.join(n_counterfactuals)
+        test_repeated.dropna(inplace = True)
 
-        self.test_repeated = test
+        test_repeated = test_repeated.reindex(test_repeated.index.repeat(test_repeated.N))
+        test_repeated.drop(['N'], axis=1, inplace=True)
 
-        self.results = self.calculate_metrics(synth_positive, self.test_repeated, data, self.model, response, scaler) # SOMETHING BREAKS HERE
-        
-        # find the best row for each test obs
+        self.test_repeated = test_repeated
+
+        # print(synth_positive)
+        # print("-----")
+        # print(self.test_repeated)
+
+        self.results = self.calculate_metrics(synth_positive, self.test_repeated, data, self.model, \
+            response, transform, inverse_transform) 
+
+        # Find the best row for each test obs
         results_sparse = pd.DataFrame(columns=self.results.columns)
-        # print(results_sparse)
+
         for idx in list(set(self.results.index)):
             idx_df = self.results.loc[idx]
-            if(isinstance(idx_df, pd.DataFrame)): # if you have multiple rows
-                sparse = min(idx_df.L0)
-                sparse_df = idx_df[idx_df.L0 == sparse]
-                closest = min(sparse_df.L2)
+            if(isinstance(idx_df, pd.DataFrame)): # If you have multiple rows
+                sparse = min(idx_df.L0) # 1) find least # features changed
+                sparse_df = idx_df[idx_df.L0 == sparse] 
+                closest = min(sparse_df.L2) # find smallest Gower distance
                 close_df = sparse_df[sparse_df.L2 == closest]
+
                 if(close_df.shape[0]>1):
-                    highest_feasibility = max(close_df.feasibility)
+                    highest_feasibility = max(close_df.feasibility) #  3) find most feasible
                     close_df = close_df[close_df.feasibility == highest_feasibility].head(1)
 
-            else: # if you have only one row
+            else: # if you have only one row - return that row
                 close_df = idx_df.to_frame().T
                 
-            # print(sparse)
-            # print(close_df)
             results_sparse = pd.concat([results_sparse, close_df], axis=0)
 
         self.results_sparse = results_sparse
 
-    def calculate_metrics(self, synth, test, data, model, response, scaler):
+    def calculate_metrics(self, synth, test, data, model, response, transform, inverse_transform):
 
         features = synth.columns.to_list()
         features.remove(response)
 
         synth_metrics = synth.copy()
 
+        synth.sort_index(inplace=True)
+        
+
         # 1) Distance: Sparsity and Euclidean distance
         factual = test[features].sort_index().to_numpy()
         counterfactuals = synth[features].sort_index().to_numpy()
 
         delta = factual - counterfactuals # get_delta(factual, counterfactuals)
-
-        # d1 = d1_distance(delta) # sparsity
-        # d2 = d2_distance(delta) # sparsity
-        # d3 = d3_distance(delta) # euclidean distance
 
         d1 = np.sum(delta != 0, axis=1, dtype=float).tolist() # sparsity
         d2 = np.sum(np.abs(delta), axis=1, dtype=float).tolist() # manhatten distance
@@ -208,7 +226,6 @@ class MCCE:
 
         synth_metrics['feasibility'] = feas_results
 
-
         # 5) Redundancy 
         # redund = redundancy(synth, test, model, response)
         # synth_metrics['redundancy'] = redund
@@ -217,18 +234,55 @@ class MCCE:
         synth_metrics['success'] = 1
 
         # 7) Violation
-        # con_vio = constraint_violation(synth, test, self.cont_feat, self.fixed_features, scaler)
-        # synth_metrics['violation'] = con_vio
 
-        # test_inverse = scaler(test) # this will have the original feature names
-        # synth_inverse = scaler(synth)
+        synth.sort_index(inplace=True)
 
-        # print(test_inverse)
+        def intersection(lst1, lst2):
+            return list(set(lst1) & set(lst2))
+        
+        df_decoded_cfs = inverse_transform(synth.copy())
 
-        instance = test[self.fixed_features].sort_index().to_numpy()
-        cf = synth[self.fixed_features].to_numpy()
-        delta = cf - instance
+        df_factuals = inverse_transform(test.copy())
 
-        synth_metrics['violation'] = np.sum(delta != 0, axis=1, dtype=np.float).tolist()
+        # check continuous using np.isclose to allow for very small numerical differences
+        cfs_continuous_immutable = df_decoded_cfs[
+            intersection(self.continuous, self.fixed_features)
+        ]
+        # print(self.continuous)
+        # print(self.immutables)
+        # print(self.categorical)
+        factual_continuous_immutable = df_factuals[
+            intersection(self.continuous, self.immutables)
+        ]
+
+        continuous_violations = np.invert(
+            np.isclose(cfs_continuous_immutable, factual_continuous_immutable)
+        )
+        continuous_violations = np.sum(continuous_violations, axis=1).reshape(
+            (-1, 1)
+        )  # sum over features
+
+        # print(continuous_violations)
+
+        # check categorical by boolean comparison
+        cfs_categorical_immutable = df_decoded_cfs[
+            intersection(self.categorical, self.immutables)
+        ]
+        # print(cfs_categorical_immutable)
+        factual_categorical_immutable = df_factuals[
+            intersection(self.categorical, self.immutables)
+        ]
+
+        
+        cfs_categorical_immutable.sort_index(inplace=True)
+        factual_categorical_immutable.sort_index(inplace=True)
+        cfs_categorical_immutable.index.name = None
+
+        categorical_violations = cfs_categorical_immutable != factual_categorical_immutable
+        categorical_violations = np.sum(categorical_violations.values, axis=1).reshape(
+            (-1, 1)
+        )  # sum over features
+
+        synth_metrics['violation'] = continuous_violations + categorical_violations
 
         return synth_metrics

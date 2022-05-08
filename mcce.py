@@ -151,12 +151,8 @@ class MCCE:
 
         self.test_repeated = test_repeated
 
-        # print(synth_positive)
-        # print("-----")
-        # print(self.test_repeated)
-
-        self.results = self.calculate_metrics(synth_positive, self.test_repeated, data, self.model, \
-            response, transform, inverse_transform) 
+        self.results = self.calculate_metrics(synth=synth_positive, test=self.test_repeated, data=data, \
+            model=self.model, response=response, transform=transform, inverse_transform=inverse_transform) 
 
         # Find the best row for each test obs
         results_sparse = pd.DataFrame(columns=self.results.columns)
@@ -184,19 +180,20 @@ class MCCE:
 
         features = synth.columns.to_list()
         features.remove(response)
+        synth.sort_index(inplace=True)
+
+        df_decoded_cfs = inverse_transform(synth.copy())
+        df_factuals = inverse_transform(test.copy())
 
         synth_metrics = synth.copy()
-
-        synth.sort_index(inplace=True)
         
-
         # 1) Distance: Sparsity and Euclidean distance
         factual = test[features].sort_index().to_numpy()
         counterfactuals = synth[features].sort_index().to_numpy()
 
-        delta = factual - counterfactuals # get_delta(factual, counterfactuals)
+        delta = factual - counterfactuals
 
-        d1 = np.sum(delta != 0, axis=1, dtype=float).tolist() # sparsity
+        d1 = np.sum(np.invert(np.isclose(delta, np.zeros_like(delta), atol=1e-5)), axis=1, dtype=float).tolist() # sparsity
         d2 = np.sum(np.abs(delta), axis=1, dtype=float).tolist() # manhatten distance
         d3 = np.sum(np.square(np.abs(delta)), axis=1, dtype=np.float).tolist() # euclidean distance
 
@@ -204,14 +201,7 @@ class MCCE:
         synth_metrics['L1'] = d2
         synth_metrics['L2'] = d3
 
-        # 3) kNN
-        # neighb = yNN(data, synth, response, y=5)
-        # synth_metrics['yNN'] = neighb
-
-
-        # 4) Feasibility 
-        # feas = feasibility(data, synth, response, y=5)
-        # synth_metrics['feasibility'] = feas
+        # 2) Feasibility 
 
         cols = data.columns
         cols.drop(response)
@@ -219,38 +209,26 @@ class MCCE:
         feas_results = []
         nbrs = NearestNeighbors(n_neighbors=5).fit(synth[cols].values)
 
-        for i, row in synth[cols].iterrows():
+        for _, row in synth[cols].iterrows():
             knn = nbrs.kneighbors(row.values.reshape((1, -1)), 5, return_distance=True)[0]
             
             feas_results.append(np.mean(knn))
 
         synth_metrics['feasibility'] = feas_results
 
-        # 5) Redundancy 
-        # redund = redundancy(synth, test, model, response)
-        # synth_metrics['redundancy'] = redund
-
-        # 6) Success
+        # 3) Success
         synth_metrics['success'] = 1
 
-        # 7) Violation
-
-        synth.sort_index(inplace=True)
-
+        # 4) Violation
+    
         def intersection(lst1, lst2):
             return list(set(lst1) & set(lst2))
         
-        df_decoded_cfs = inverse_transform(synth.copy())
-
-        df_factuals = inverse_transform(test.copy())
-
         # check continuous using np.isclose to allow for very small numerical differences
         cfs_continuous_immutable = df_decoded_cfs[
             intersection(self.continuous, self.fixed_features)
         ]
-        # print(self.continuous)
-        # print(self.immutables)
-        # print(self.categorical)
+        
         factual_continuous_immutable = df_factuals[
             intersection(self.continuous, self.immutables)
         ]
@@ -262,8 +240,6 @@ class MCCE:
             (-1, 1)
         )  # sum over features
 
-        # print(continuous_violations)
-
         # check categorical by boolean comparison
         cfs_categorical_immutable = df_decoded_cfs[
             intersection(self.categorical, self.immutables)
@@ -273,7 +249,6 @@ class MCCE:
             intersection(self.categorical, self.immutables)
         ]
 
-        
         cfs_categorical_immutable.sort_index(inplace=True)
         factual_categorical_immutable.sort_index(inplace=True)
         cfs_categorical_immutable.index.name = None

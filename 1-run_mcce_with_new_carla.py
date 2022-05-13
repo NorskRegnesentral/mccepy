@@ -115,12 +115,9 @@ for data_name in args.dataset:
 
     start = time.time()
 
-    print(dataset.inverse_transform(factuals).loc[263])
-
     # (3) Fit MCCE object
     print("Fitting MCCE model...")
-    mcce = MCCE(fixed_features=fixed_features, immutables=immutables, model=ml_model, seed=1,\
-        continuous=cont_feat, categorical=cat_feat)
+    mcce = MCCE(fixed_features=fixed_features, immutables=immutables, model=ml_model, seed=1, continuous=cont_feat, categorical=cat_feat)
 
     mcce.fit(df.drop(y_col, axis=1), dtypes)
 

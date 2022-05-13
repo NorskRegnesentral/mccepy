@@ -132,12 +132,10 @@ dataset = CsvCatalog(file_path="/nr/samba/user/anr/pkg/MCCE/Datasets/Adult/train
                      categorical=categorical,
                      immutables=immutable,
                      target='income',
-                    #  scaling_method=None,
                      encoding_method="OneHot_drop_first", # New!
                      )
 
 torch.manual_seed(0)
-
 
 ml_model = MLModelCatalog(
         dataset, 
@@ -226,21 +224,6 @@ cols = data.columns
 cols.drop(response)
 
 # 1) Distance: Sparsity and Euclidean distance
-
-# categorical_encoded = []
-# for x in dataset.df.columns:
-#     if x not in dataset.continuous:
-#         if x not in dataset.target:
-#             categorical_encoded.append(x)
-
-# factual = test[features].sort_index().to_numpy()
-# counterfactuals = synth[features].sort_index().to_numpy()
-
-# cfs_continuous = synth[dataset.continuous].sort_index().to_numpy()
-# cfs_categorical = synth[categorical_encoded].sort_index().to_numpy()
-
-# factual_continuous = test[dataset.continuous].sort_index().to_numpy()
-# factual_categorical = test[categorical_encoded].sort_index().to_numpy()
 
 factual = test_inverse_transform[features_inverse_transform].sort_index().to_numpy()
 counterfactuals = synth_inverse_transform[features_inverse_transform].sort_index().to_numpy()

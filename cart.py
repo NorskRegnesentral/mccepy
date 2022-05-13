@@ -43,7 +43,9 @@ class CARTMethod(Method):
 
         leaves_pred_index_df = pd.DataFrame({'leaves_pred': leaves_pred, 'index': range(len(leaves_pred))})
         leaves_pred_index_dict = leaves_pred_index_df.groupby('leaves_pred').apply(lambda x: x.to_numpy()[:, -1]).to_dict()
+        # print(leaves_pred_index_dict.items())
         for leaf, indices in leaves_pred_index_dict.items():
+            np.random.seed(0)
             y_pred[indices] = np.random.choice(self.leaves_y_dict[leaf], size=len(indices), replace=True)
 
         return y_pred

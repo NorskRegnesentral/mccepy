@@ -85,6 +85,7 @@ class MCCE:
 
     def _fit(self, df):
         self.saved_methods = {}
+        self.trees = {}
 
         # train
         self.predictor_matrix_columns = self.predictor_matrix.columns.to_numpy()
@@ -97,6 +98,8 @@ class MCCE:
             
             col_method.fit(X_df=df[col_predictors], y_df=df[col])
             # save the method
+            if self.method[col] == 'cart':
+                self.trees[col] = col_method.leaves_y_dict
             self.saved_methods[col] = col_method
 
     def generate(self, test, k):
@@ -113,9 +116,9 @@ class MCCE:
         synth_df_mutable = pd.DataFrame(data=np.zeros([self.k * n_test, self.n_mutable]), columns=self.mutable_features, index=synth_df.index)
 
         synth_df = pd.concat([synth_df, synth_df_mutable], axis=1)
-
+        # print(synth_df.head(10))
         start_time = time.time()
-        for col in self.mutable_features: #self.visit_sequence.sort_values().iteritems():
+        for col in self.mutable_features: # self.visit_sequence.sort_values().iteritems():
             # reload the method
             col_method = self.saved_methods[col]
             # predict with the method

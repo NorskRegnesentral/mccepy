@@ -104,7 +104,7 @@ for data_name in args.dataset:
         fixed_features = ['age']
         immutables = ['age']
     elif data_name == 'compas':
-        fixed_features = ['age', 'sex_Male', 'race_White']
+        fixed_features = ['age', 'sex_Male', 'race_Other']
         immutables = ['age', 'sex', 'race']
     
     #  Create dtypes for MCCE()

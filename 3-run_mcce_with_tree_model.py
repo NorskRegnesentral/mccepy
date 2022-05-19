@@ -13,7 +13,8 @@ from carla import MLModel
 from mcce import MCCE
 
 data_name = "adult"
-# data_name = 'give_me_some_credit'
+data_name = 'give_me_some_credit'
+data_name = 'compas'
 K = 10000
 n_test = 100
 results_all = None

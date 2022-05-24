@@ -9,7 +9,6 @@ from carla.models.negative_instances import predict_negative_instances
 
 import torch
 
-    
 from mcce import MCCE
 
 parser = argparse.ArgumentParser(description="Fit MCCE with various datasets.")
@@ -90,26 +89,23 @@ for data_name in args.dataset:
     
     factuals = predict_negative_instances(ml_model, dataset.df)
     test_factual = factuals.iloc[:n_test]
-    # test_factual_inverse = dataset.inverse_transform(test_factual)
     
     y_col = dataset.target
-    features_and_response = dataset.df.columns
     cont_feat = dataset.continuous
-    cat_feat = [x for x in features_and_response if x not in cont_feat] #  these have new names since encode_normalize_order_factuals()
     
+    cat_feat = dataset.categorical
+    cat_feat_encoded = dataset.encoder.get_feature_names(dataset.categorical)
+
     if data_name == 'adult' : 
         fixed_features = ['age', 'sex_Male']
-        immutables = ['age', 'sex']
     elif data_name == 'give_me_some_credit':
         fixed_features = ['age']
-        immutables = ['age']
     elif data_name == 'compas':
         fixed_features = ['age', 'sex_Male', 'race_Other']
-        immutables = ['age', 'sex', 'race']
     
     #  Create dtypes for MCCE()
     dtypes = dict([(x, "float") for x in cont_feat])
-    for x in cat_feat:
+    for x in cat_feat_encoded:
         dtypes[x] = "category"
     df = (dataset.df).astype(dtypes)
 
@@ -117,21 +113,18 @@ for data_name in args.dataset:
 
     # (3) Fit MCCE object
     print("Fitting MCCE model...")
-    mcce = MCCE(fixed_features=fixed_features, immutables=immutables, model=ml_model, seed=1, continuous=cont_feat, categorical=cat_feat)
-
+    mcce = MCCE(fixed_features=fixed_features, continuous=dataset.continuous, categorical=dataset.categorical,\
+            model=ml_model, seed=1, catalog=dataset.catalog)
+    
     mcce.fit(df.drop(y_col, axis=1), dtypes)
 
     print("Generating counterfactuals with MCCE...")
     synth_df = mcce.generate(test_factual.drop(y_col, axis=1), k=K)
 
-    print(dataset.inverse_transform(synth_df).loc[263])
-
     # (4) Postprocess generated counterfactuals
     print("Postprocessing counterfactuals with MCCE...")
     mcce.postprocess(data=df, synth=synth_df, test=test_factual, response=y_col, \
-    inverse_transform=dataset.inverse_transform, cutoff=0.5)
-    
-    print(dataset.inverse_transform(mcce.results_sparse).loc[263])
+        inverse_transform=dataset.inverse_transform, cutoff=0.5)
 
     timing = time.time() - start
     print(f"timing: {timing}")
@@ -141,7 +134,7 @@ for data_name in args.dataset:
     # (5) Print results 
     mcce.results_sparse.to_csv(f"/nr/samba/user/anr/pkg/MCCE_Python/Results/{data_name}_mcce_results_k_{K}_n_{n_test}.csv")
     
-
+    # (6) Print the counterfactuals inverted to their original feature values/ranges
     results = mcce.results_sparse.copy()
     results['data'] = data_name
     results['method'] = 'mcce'

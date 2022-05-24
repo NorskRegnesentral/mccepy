@@ -2,9 +2,7 @@ import torch
 import time
 
 from sklearn.neighbors import NearestNeighbors
-from sklearn import preprocessing
 from mcce import MCCE
-from carla.data.catalog import OnlineCatalog
 from carla.data.catalog import CsvCatalog
 from carla.models.catalog import MLModelCatalog
 from carla.models.negative_instances import predict_negative_instances
@@ -13,130 +11,57 @@ import numpy as np
 import pandas as pd
 
 n_test = 10
-K = 10000
+K = 100
 
-train_path = "/nr/samba/user/anr/pkg/MCCE/Datasets/Adult/adult.data"
-test_path = "/nr/samba/user/anr/pkg/MCCE/Datasets/Adult/adult.test"
+# Load raw data
+
+train_path = "Data/adult.data"
+test_path = "Data/adult.test"
 train = pd.read_csv(train_path, sep=", ", header=None, names=['age', 'workclass', 'fnlwgt', 'education', 'education-num', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'capital-gain', 'capital-loss', 'hours-per-week', 'native-country', 'income'])
 test = pd.read_csv(test_path, skiprows=1, sep=", ", header=None, names=['age', 'workclass', 'fnlwgt', 'education', 'education-num', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'capital-gain', 'capital-loss', 'hours-per-week', 'native-country', 'income'])
 
 df = pd.concat([train, test], axis=0, ignore_index=True)
 
+df = df.drop(['education'], axis=1)
+
+# Processing
+
 mapping = {'>50K': '>50K', '>50K.': '>50K', '<=50K': '<=50K', '<=50K.': '<=50K'}
 
 df['income'] = [mapping[item] for item in df['income']]
 
-feature = 'workclass'
-d = df.groupby([feature]).size().sort_values(ascending=False)
-for i, ind in enumerate(d):
-    if i <= 3:
-        d[i] = i
-    else:
-        d[i] = 3
-mapping = d.to_dict()
-df[feature] = [mapping[item] for item in df[feature]]
+for feature in ["workclass", "marital-status", "occupation", "relationship", \
+    "sex", "race", "native-country", "income"]:
+    d = df.groupby([feature]).size().sort_values(ascending=False)
+    for i, ind in enumerate(d):
+        if i <= 3:
+            d[i] = i
+        else:
+            d[i] = 3
+    mapping = d.to_dict()
+    df[feature] = [mapping[item] for item in df[feature]]
 
-feature = 'education'
-d = df.groupby([feature]).size().sort_values(ascending=False)
-for i, ind in enumerate(d):
-    if i <= 3:
-        d[i] = i
-    else:
-        d[i] = 3
-mapping = d.to_dict()
-df[feature] = [mapping[item] for item in df[feature]]
+df.to_csv("Data/train_not_normalized_data_from_carla.csv", index=False)
 
-feature = 'marital-status'
-d = df.groupby([feature]).size().sort_values(ascending=False)
-for i, ind in enumerate(d):
-    if i <= 3:
-        d[i] = i
-    else:
-        d[i] = 3
-mapping = d.to_dict()
-df[feature] = [mapping[item] for item in df[feature]]
-
-feature = 'occupation'
-d = df.groupby([feature]).size().sort_values(ascending=False)
-for i, ind in enumerate(d):
-    if i <= 3:
-        d[i] = i
-    else:
-        d[i] = 3
-mapping = d.to_dict()
-df[feature] = [mapping[item] for item in df[feature]]
-
-feature = 'relationship'
-d = df.groupby([feature]).size().sort_values(ascending=False)
-for i, ind in enumerate(d):
-    if i <= 3:
-        d[i] = i
-    else:
-        d[i] = 3
-mapping = d.to_dict()
-df[feature] = [mapping[item] for item in df[feature]]
-
-feature = 'sex'
-d = df.groupby([feature]).size().sort_values(ascending=False)
-for i, ind in enumerate(d):
-    if i <= 3:
-        d[i] = i
-    else:
-        d[i] = 3
-mapping = d.to_dict()
-df[feature] = [mapping[item] for item in df[feature]]
-
-feature = 'race'
-d = df.groupby([feature]).size().sort_values(ascending=False)
-for i, ind in enumerate(d):
-    if i <= 3:
-        d[i] = i
-    else:
-        d[i] = 3
-mapping = d.to_dict()
-df[feature] = [mapping[item] for item in df[feature]]
-
-feature = 'native-country'
-d = df.groupby([feature]).size().sort_values(ascending=False)
-for i, ind in enumerate(d):
-    if i <= 3:
-        d[i] = i
-    else:
-        d[i] = 3
-mapping = d.to_dict()
-df[feature] = [mapping[item] for item in df[feature]]
-
-feature = 'income'
-d = df.groupby([feature]).size().sort_values(ascending=False)
-for i, ind in enumerate(d):
-    if i <= 3:
-        d[i] = i
-    else:
-        d[i] = 3
-mapping = d.to_dict()
-df[feature] = [mapping[item] for item in df[feature]]
-
-df.drop(['education'], inplace=True, axis=1)
-
-df.to_csv("/nr/samba/user/anr/pkg/MCCE/Datasets/Adult/train_not_normalized_data_from_carla.csv", index=False)
-
-from carla.data.catalog import CsvCatalog
+## Read data using CARLA
 
 continuous = ["age", "fnlwgt", "education-num", "capital-gain", "hours-per-week", "capital-loss"]
 categorical = ["marital-status", "native-country", "occupation", "race", "relationship", "sex", "workclass"]
 # categorical = enc.get_feature_names(categorical)
 immutable = ["age", "sex"]
 
-dataset = CsvCatalog(file_path="/nr/samba/user/anr/pkg/MCCE/Datasets/Adult/train_not_normalized_data_from_carla.csv",
+dataset = CsvCatalog(file_path="Data/train_not_normalized_data_from_carla.csv",
                      continuous=continuous,
                      categorical=categorical,
                      immutables=immutable,
                      target='income',
                      encoding_method="OneHot_drop_first", # New!
                      )
+dataset.catalog = {'target': dataset.target, 'continuous': dataset.continuous, 'categorical': dataset.categorical, 'immutable': dataset.immutables}
+
+## Fit predictive model
 
 torch.manual_seed(0)
-
 ml_model = MLModelCatalog(
         dataset, 
         model_type="ann", 
@@ -153,33 +78,45 @@ hidden_size=[18, 9, 3],
 force_train=True, # don't forget to add this or it might load an older model from disk
 )
 
+## Find factuals to generate counterfactuals for
+
 factuals = predict_negative_instances(ml_model, dataset.df)
 test_factual = factuals.iloc[:n_test]
-# test_factual_inverse = dataset.inverse_transform(test_factual)
+
+## Prepare data for MCCE
+factuals = predict_negative_instances(ml_model, dataset.df)
+test_factual = factuals.iloc[:n_test]
 
 y_col = dataset.target
-features_and_response = dataset.df.columns
 cont_feat = dataset.continuous
-cat_feat = [x for x in features_and_response if x not in cont_feat] #  these have new names since encode_normalize_order_factuals()
+
+cat_feat = dataset.categorical
+cat_feat_encoded = dataset.encoder.get_feature_names(dataset.categorical)
 
 fixed_features = ['age', 'sex_1']
 
 #  Create dtypes for MCCE()
 dtypes = dict([(x, "float") for x in cont_feat])
-for x in cat_feat:
+for x in cat_feat_encoded:
     dtypes[x] = "category"
 df = (dataset.df).astype(dtypes)
 
+
 start = time.time()
-print("Fitting MCCE model...")
-mcce = MCCE(fixed_features=['age', 'sex_1'], immutables=['age', 'sex_1'], \
-    model=ml_model, seed=1, continuous=dataset.continuous, categorical=dataset.categorical)
+
+# fixed_features = names in dataset
+# categorical = original feature names
+
+mcce = MCCE(fixed_features=fixed_features, continuous=dataset.continuous, categorical=dataset.categorical,\
+            model=ml_model, seed=1, catalog=dataset.catalog)
+
 mcce.fit(df.drop(y_col, axis=1), dtypes)
 
-print("Generating counterfactuals with MCCE...")
 synth_df = mcce.generate(test_factual.drop(y_col, axis=1), k=K)
 
-# ------------- post processing
+# ------------- postprocess() -----------------
+## TODO: Implement this in MCCE package
+
 data = df
 synth = synth_df
 test = test_factual
@@ -204,6 +141,7 @@ test_repeated.dropna(inplace = True)
 test_repeated = test_repeated.reindex(test_repeated.index.repeat(test_repeated.N))
 test_repeated.drop(['N'], axis=1, inplace=True)
 
+# --------------- calculate_metrics() -----------------
 
 synth = synth_positive
 test = test_repeated
@@ -218,7 +156,6 @@ features_inverse_transform.remove(response)
 
 synth_metrics = synth.copy()
 synth.sort_index(inplace=True)
-
 
 cols = data.columns
 cols.drop(response)
@@ -334,9 +271,11 @@ timing = time.time() - start
 print(f"timing: {timing}")
 results_sparse['time (seconds)'] = timing
 
+## Save results
 
-results_sparse.to_csv(f"/nr/samba/user/anr/pkg/MCCE_Python/Results/adult_mcce_results_raw_data_k_{K}_n_{n_test}.csv")
+results_sparse.to_csv(f"Results/adult_mcce_results_raw_data_k_{K}_n_{n_test}.csv")
 
+## Save the original factuals
 
 orig_preds = ml_model.predict_proba(results_sparse)
 new_preds = []
@@ -347,9 +286,7 @@ results_inverse = dataset.inverse_transform(results_sparse)
 
 results_inverse['pred'] = new_preds
 
-# mcce_raw = pd.concat([results_sparse[['L0', 'L1', 'L2', 'feasibility', 'success', 'violation', 'time (seconds)']], results_inverse], axis=1)
-
-results_inverse.to_csv(f"/nr/samba/user/anr/pkg/MCCE_Python/Results/adult_mcce_results_raw_data_k_{K}_n_{n_test}_inverse_transform.csv")
+results_inverse.to_csv(f"Results/adult_mcce_results_raw_data_k_{K}_n_{n_test}_inverse_transform.csv")
 
 true_raw =  dataset.inverse_transform(test_factual)
 
@@ -360,4 +297,4 @@ for x in orig_preds:
 
 true_raw['pred'] = new_preds
 
-true_raw.to_csv(f"/nr/samba/user/anr/pkg/MCCE_Python/Results/adult_raw_data_n_{n_test}.csv")
+true_raw.to_csv(f"Results/adult_raw_data_n_{n_test}.csv")

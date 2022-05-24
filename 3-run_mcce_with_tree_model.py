@@ -1,13 +1,10 @@
 import time
-import pandas as pd
 
 from sklearn import metrics
 from sklearn.ensemble import RandomForestClassifier
 
 from carla.data.catalog import OnlineCatalog
-from carla.models.catalog import MLModelCatalog
 from carla.models.negative_instances import predict_negative_instances
-import carla.recourse_methods.catalog as recourse_catalog
 from carla import MLModel
 
 from mcce import MCCE
@@ -15,8 +12,10 @@ from mcce import MCCE
 data_name = "adult"
 data_name = 'give_me_some_credit'
 data_name = 'compas'
+
 K = 10000
 n_test = 100
+
 results_all = None
 
 dataset = OnlineCatalog(data_name)
@@ -36,10 +35,6 @@ class RandomForestModel(MLModel):
         
         x_train = df_train[self.data.continuous + encoded_features]
         y_train = df_train[self.data.target]
-        x_test = df_test[self.data.continuous + encoded_features]
-        y_test = df_test[self.data.target]
-
-        # print(x_train)
 
         self._feature_input_order = self.data.continuous + encoded_features
 
@@ -61,12 +56,10 @@ class RandomForestModel(MLModel):
 
     @property
     def backend(self):
-        # The ML framework the model was trained on
         return "xgboost"
 
     @property
     def raw_model(self):
-        # The black-box model object
         return self._mymodel
 
     @property
@@ -78,16 +71,13 @@ class RandomForestModel(MLModel):
             booster.feature_names = self.feature_input_order
         return booster_it
 
-    # The predict function outputs
-    # the continuous prediction of the model
     def predict(self, x):
         return self._mymodel.predict(self.get_ordered_features(x))
 
-    # The predict_proba method outputs
-    # the prediction as class probabilities
     def predict_proba(self, x):
-        # print(self.get_ordered_features(x))
         return self._mymodel.predict_proba(self.get_ordered_features(x))
+
+# Fit predictive model
 
 ml_model = RandomForestModel(dataset)
 
@@ -96,13 +86,18 @@ pred = [row[1] for row in pred]
 fpr, tpr, thresholds = metrics.roc_curve(dataset.df_test[dataset.target], pred, pos_label=1)
 print(metrics.auc(fpr, tpr))
 
+# Find factuals to generate counterfactuals for
+
 factuals = predict_negative_instances(ml_model, dataset.df)
 test_factual = factuals.iloc[:n_test]
 
+# Prepare data for MCCE
+
 y_col = dataset.target
-features_and_response = dataset.df.columns
 cont_feat = dataset.continuous
-cat_feat = [x for x in features_and_response if x not in cont_feat] #  these have new names since encode_normalize_order_factuals()
+
+cat_feat = dataset.categorical
+cat_feat_encoded = dataset.encoder.get_feature_names(dataset.categorical)
 
 if data_name == 'adult': 
     fixed_features = ['age', 'sex_Male']
@@ -113,28 +108,32 @@ elif data_name == 'compas':
 
 #  Create dtypes for MCCE()
 dtypes = dict([(x, "float") for x in cont_feat])
-for x in cat_feat:
+for x in cat_feat_encoded:
     dtypes[x] = "category"
 df = (dataset.df).astype(dtypes)
 
+# Fit MCCE method
 
+import time
 start = time.time()
+# fixed_features = names in dataset
+# categorical = original feature names
 
-# (3) Fit MCCE object
-print("Fitting MCCE model...")
-mcce = MCCE(fixed_features=fixed_features, immutables=['age', 'sex'], \
-    model=ml_model, seed=1, continuous=dataset.continuous, categorical=dataset.categorical)
+mcce = MCCE(fixed_features=fixed_features, continuous=dataset.continuous, categorical=dataset.categorical,\
+            model=ml_model, seed=1, catalog=dataset.catalog)
+
 mcce.fit(df.drop(y_col, axis=1), dtypes)
 
-print("Generating counterfactuals with MCCE...")
 synth_df = mcce.generate(test_factual.drop(y_col, axis=1), k=K)
-mcce.postprocess(data=df, synth=synth_df, test=test_factual, \
-    response=y_col, inverse_transform=dataset.inverse_transform, cutoff=0.5)
+
+mcce.postprocess(data=df, synth=synth_df, test=test_factual, response=y_col, \
+    inverse_transform=dataset.inverse_transform, cutoff=0.5)
 
 timing = time.time() - start
-print(f"timing: {timing}")
 
 mcce.results_sparse['time (seconds)'] = timing
+
+# Get the original factual feature values
 
 orig_preds = ml_model.predict_proba(test_factual)
 new_preds = []
@@ -143,6 +142,8 @@ for x in orig_preds:
 
 test_inverse = dataset.inverse_transform(test_factual)
 test_inverse['pred'] = new_preds
+
+# Save original factual values
 
 test_inverse.to_csv(f"/nr/samba/user/anr/pkg/MCCE_Python/Results/{data_name}_tree_model_n_{n_test}_inverse_transform.csv")
 
@@ -153,5 +154,7 @@ for x in orig_preds:
 
 mcce_inverse = dataset.inverse_transform(mcce.results_sparse)
 mcce_inverse['pred'] = new_preds
+
+# Save results
 
 mcce_inverse.to_csv(f"/nr/samba/user/anr/pkg/MCCE_Python/Results/{data_name}_mcce_results_tree_model_k_{K}_n_{n_test}_inverse_transform.csv")

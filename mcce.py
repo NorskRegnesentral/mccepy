@@ -4,7 +4,6 @@ import pandas as pd
 
 from cart import CARTMethod
 from sample import SampleMethod
-# from metrics import get_delta, d1_distance, d2_distance, d3_distance, yNN, feasibility, redundancy, constraint_violation
 from sklearn.neighbors import NearestNeighbors
 
 
@@ -13,28 +12,21 @@ METHODS_MAP = {'cart': CARTMethod, 'sample': SampleMethod}
 class MCCE:
     def __init__(self,
                  fixed_features=None,
-                 immutables=None,
-                 model=None,
-                 seed=None,
                  continuous=None,
                  categorical=None,
-                #  transform=None,
-                #  inverse_transform=None
+                 model=None,
+                 seed=None,
+                 catalog=None
                  ):
 
         # initialise arguments
         self.fixed_features = fixed_features  # features to condition on - the ones in the dataset
-
-        if immutables is None:
-            self.immutables = fixed_features
-        else:
-            self.immutables = immutables # features to condition on - the original feature names
-        self.seed = seed
-        self.model = model  # predictive model
-        # self.transform = transform #  use to normalize/scale continuous features
-        # self.inverse_transform = inverse_transform # use to go from normalize/scaled features to original features
         self.continuous = continuous
         self.categorical = categorical
+
+        self.seed = seed
+        self.model = model
+        self.catalog = catalog #  includes the fixed feature names before the transformation
 
         self.method = None
         self.visit_sequence = None
@@ -90,6 +82,7 @@ class MCCE:
         # train
         self.predictor_matrix_columns = self.predictor_matrix.columns.to_numpy()
         for col, _ in self.visit_sequence.sort_values().iteritems():
+            # print(col)
             # initialise the method
             col_method = METHODS_MAP[self.method[col]](dtype=self.df_dtypes[col], random_state=self.seed)
             
@@ -133,12 +126,13 @@ class MCCE:
         synth_df = synth_df[test.columns]
         return synth_df
 
-    def postprocess(self, data, synth, test, response, transform=None, inverse_transform=None, cutoff=0.5):
+    def postprocess(self, data, synth, test, response, inverse_transform=None, cutoff=0.5):
+        
+        self.cutoff = cutoff
 
         # Predict response of generated data
         synth[response] = self.model.predict(synth)
         synth_positive = synth[synth[response]>=cutoff] # drop negative responses
-        
         
         # Duplicate original test observations N times where N is number of positive counterfactuals
         n_counterfactuals = synth_positive.groupby(synth_positive.index).size()
@@ -155,7 +149,7 @@ class MCCE:
         self.test_repeated = test_repeated
 
         self.results = self.calculate_metrics(synth=synth_positive, test=self.test_repeated, data=data, \
-            model=self.model, response=response, transform=transform, inverse_transform=inverse_transform) 
+            model=self.model, response=response, inverse_transform=inverse_transform) 
 
         # Find the best row for each test obs
         results_sparse = pd.DataFrame(columns=self.results.columns)
@@ -179,14 +173,20 @@ class MCCE:
 
         self.results_sparse = results_sparse
 
-    def calculate_metrics(self, synth, test, data, model, response, transform, inverse_transform):
+    def calculate_metrics(self, synth, test, data, model, response, inverse_transform):
 
         features = synth.columns.to_list()
         features.remove(response)
         synth.sort_index(inplace=True)
 
-        df_decoded_cfs = inverse_transform(synth.copy())
-        df_factuals = inverse_transform(test.copy())
+        if inverse_transform:  # necessary for violation rate
+            df_decoded_cfs = inverse_transform(synth.copy())
+            df_decoded_factuals = inverse_transform(test.copy())
+
+        else:
+            df_decoded_cfs = synth.copy()
+            df_decoded_factuals = test.copy()
+
 
         synth_metrics = synth.copy()
         
@@ -221,46 +221,47 @@ class MCCE:
 
         # 3) Success
         synth_metrics['success'] = 1
+        ## TO DO: predict again? Problem: Takes more time
+        # temp = self.model.predict(synth)
+        # synth_metrics['success'] = temp >= self.cutoff
 
         # 4) Violation
-    
+        # check continuous using np.isclose to allow for very small numerical differences
         def intersection(lst1, lst2):
             return list(set(lst1) & set(lst2))
-        
-        # check continuous using np.isclose to allow for very small numerical differences
-        cfs_continuous_immutable = df_decoded_cfs[
-            intersection(self.continuous, self.fixed_features)
+
+        cfs_continuous_fixed = df_decoded_cfs[
+            intersection(self.continuous, self.catalog['immutable'])
         ]
-        
-        factual_continuous_immutable = df_factuals[
-            intersection(self.continuous, self.immutables)
+
+        factual_continuous_fixed = df_decoded_factuals[
+                intersection(self.continuous, self.catalog['immutable'])
         ]
 
         continuous_violations = np.invert(
-            np.isclose(cfs_continuous_immutable, factual_continuous_immutable)
+            np.isclose(cfs_continuous_fixed, factual_continuous_fixed)
         )
         continuous_violations = np.sum(continuous_violations, axis=1).reshape(
             (-1, 1)
         )  # sum over features
 
         # check categorical by boolean comparison
-        cfs_categorical_immutable = df_decoded_cfs[
-            intersection(self.categorical, self.immutables)
+        cfs_categorical_fixed = df_decoded_cfs[
+            intersection(self.categorical, self.catalog['immutable'])
         ]
         # print(cfs_categorical_immutable)
-        factual_categorical_immutable = df_factuals[
-            intersection(self.categorical, self.immutables)
+        factual_categorical_fixed = df_decoded_factuals[
+            intersection(self.categorical, self.catalog['immutable'])
         ]
 
-        cfs_categorical_immutable.sort_index(inplace=True)
-        factual_categorical_immutable.sort_index(inplace=True)
-        cfs_categorical_immutable.index.name = None
+        cfs_categorical_fixed.sort_index(inplace=True)
+        factual_categorical_fixed.sort_index(inplace=True)
+        cfs_categorical_fixed.index.name = None
 
-        categorical_violations = cfs_categorical_immutable != factual_categorical_immutable
+        categorical_violations = cfs_categorical_fixed != factual_categorical_fixed
         categorical_violations = np.sum(categorical_violations.values, axis=1).reshape(
             (-1, 1)
-        )  # sum over features
-
+        )
+        
         synth_metrics['violation'] = continuous_violations + categorical_violations
-
         return synth_metrics

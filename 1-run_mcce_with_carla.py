@@ -131,24 +131,23 @@ for data_name in args.dataset:
     
     mcce.results_sparse['time (seconds)'] = timing
 
-    # (5) Print results 
+    # (5) Save results 
     mcce.results_sparse.to_csv(f"/nr/samba/user/anr/pkg/MCCE_Python/Results/{data_name}_mcce_results_k_{K}_n_{n_test}.csv")
     
     # (6) Print the counterfactuals inverted to their original feature values/ranges
     results = mcce.results_sparse.copy()
     results['data'] = data_name
     results['method'] = 'mcce'
-    results.rename(columns={'violation': 'violations'}, inplace=True)
-
-    preds = ml_model.predict_proba(results)
-    new_preds = []
-    for x in preds:
-        new_preds.append(x[1])
-    results['prediction'] = new_preds
+    results['prediction'] = ml_model.predict_proba(results)[:, [1]]
+    
+    # preds = ml_model.predict_proba(results)
+    # new_preds = []
+    # for x in preds:
+    #     new_preds.append(x[1])
+    # results['prediction'] = new_preds
     results = dataset.inverse_transform(results)
-    results.head(1)
 
-    results['validity'] = np.where(np.asarray(new_preds) >= 0.5, 1, 0)
+    # results['validity'] = np.where(np.asarray(new_preds) >= 0.5, 1, 0)
 
     results.to_csv(f"/nr/samba/user/anr/pkg/MCCE_Python/Results/{data_name}_mcce_results_k_{K}_n_{n_test}_inverse_transform.csv")
 

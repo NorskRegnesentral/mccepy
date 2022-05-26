@@ -43,11 +43,10 @@ for feature in ["workclass", "marital-status", "occupation", "relationship", \
 
 df.to_csv("Data/train_not_normalized_data_from_carla.csv", index=False)
 
-## Read data using CARLA
+## Read in data using CARLA package
 
 continuous = ["age", "fnlwgt", "education-num", "capital-gain", "hours-per-week", "capital-loss"]
 categorical = ["marital-status", "native-country", "occupation", "race", "relationship", "sex", "workclass"]
-# categorical = enc.get_feature_names(categorical)
 immutable = ["age", "sex"]
 
 dataset = CsvCatalog(file_path="Data/train_not_normalized_data_from_carla.csv",
@@ -114,8 +113,11 @@ mcce.fit(df.drop(y_col, axis=1), dtypes)
 
 synth_df = mcce.generate(test_factual.drop(y_col, axis=1), k=K)
 
-# ------------- postprocess() -----------------
+
+# ----------------------------------------------------------------
 ## TODO: Implement this in MCCE package
+
+# ------------- postprocess() -----------------
 
 data = df
 synth = synth_df
@@ -270,6 +272,8 @@ for idx in list(set(results.index)):
 timing = time.time() - start
 print(f"timing: {timing}")
 results_sparse['time (seconds)'] = timing
+
+# ----------------------------------------------------------------
 
 ## Save results
 

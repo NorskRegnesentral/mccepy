@@ -4,11 +4,8 @@ from sklearn.neighbors import NearestNeighbors
 
 def distance(counterfactuals_without_nans, factual_without_nans, ml_model):
     
-        
     arr_f = ml_model.get_ordered_features(factual_without_nans).to_numpy()
-    arr_cf = ml_model.get_ordered_features(
-        counterfactuals_without_nans
-    ).to_numpy()
+    arr_cf = ml_model.get_ordered_features(counterfactuals_without_nans).to_numpy()
 
     delta = arr_f - arr_cf 
 
@@ -25,13 +22,14 @@ def distance(counterfactuals_without_nans, factual_without_nans, ml_model):
 def feasibility(
     counterfactuals_without_nans,
     factual_without_nans,
-    dataset
+    cols,
+    target,
     ):
     
 
-    cols = dataset.df.columns
-    cols.drop(dataset.target)
-
+    # cols = dataset.df.columns
+    # cols.drop(target)
+    # print(cols)
     nbrs = NearestNeighbors(n_neighbors=5).fit(factual_without_nans[cols].values)
 
     results = []
@@ -44,24 +42,29 @@ def feasibility(
 
 
 def constraint_violation(
-    counterfactuals_without_nans, 
-    factual_without_nans,
-    dataset,
+    # counterfactuals_without_nans, 
+    # factual_without_nans,
+    df_decoded_cfs,
+    df_factuals,
+    # inverse_transform,
+    continuous,
+    categorical,
+    immutables,
     ):
     
     def intersection(lst1, lst2):
         return list(set(lst1) & set(lst2))
 
 
-    df_decoded_cfs = dataset.inverse_transform(counterfactuals_without_nans.copy())
+    # df_decoded_cfs = inverse_transform(counterfactuals_without_nans.copy())
 
-    df_factuals = dataset.inverse_transform(factual_without_nans.copy())
+    # df_factuals = inverse_transform(factual_without_nans.copy())
 
     cfs_continuous_immutable = df_decoded_cfs[
-        intersection(dataset.continuous, dataset.immutables)
+        intersection(continuous, immutables)
     ]
     factual_continuous_immutable = df_factuals[
-        intersection(dataset.continuous, dataset.immutables)
+        intersection(continuous, immutables)
     ]
 
     continuous_violations = np.invert(
@@ -73,10 +76,10 @@ def constraint_violation(
 
     # check categorical by boolean comparison
     cfs_categorical_immutable = df_decoded_cfs[
-        intersection(dataset.categorical, dataset.immutables)
+        intersection(categorical, immutables)
     ]
     factual_categorical_immutable = df_factuals[
-        intersection(dataset.categorical, dataset.immutables)
+        intersection(categorical, immutables)
     ]
 
     categorical_violations = cfs_categorical_immutable != factual_categorical_immutable
@@ -87,13 +90,9 @@ def constraint_violation(
     return (continuous_violations + categorical_violations)
 
 
-def success_rate(counterfactuals):
-    """
-    Computes success rate for all counterfactuals
-    Parameters
-    ----------
-    counterfactuals: All counterfactual examples inclusive nan values
-    Returns
-    -------
-    """
-    return (counterfactuals.dropna().shape[0]) / counterfactuals.shape[0]
+def success_rate(counterfactuals_without_nans, ml_model, cutoff=0.5):
+    
+    preds = ml_model.predict_proba(counterfactuals_without_nans)[:, [1]]
+    preds = preds >= cutoff
+    # {'success': preds>=cutoff, 'prediction': preds}
+    return ([int(x) for x in preds])

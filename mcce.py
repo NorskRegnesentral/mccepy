@@ -204,7 +204,6 @@ class MCCE:
         synth_metrics = pd.concat([synth_metrics, distances], axis=1)
 
         # 2) Feasibility 
-
         cols = data.columns.to_list()
         cols.remove(response)
 
@@ -218,7 +217,6 @@ class MCCE:
         synth_metrics['success'] = 1
 
         # 4) Violation
-
         time1 = time.time()
         violations = metrics.constraint_violation(df_decoded_cfs, df_decoded_factuals, \
             self.continuous, self.categorical, self.catalog['immutable'])

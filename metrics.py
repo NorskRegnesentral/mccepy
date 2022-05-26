@@ -23,13 +23,8 @@ def feasibility(
     counterfactuals_without_nans,
     factual_without_nans,
     cols,
-    target,
     ):
     
-
-    # cols = dataset.df.columns
-    # cols.drop(target)
-    # print(cols)
     nbrs = NearestNeighbors(n_neighbors=5).fit(factual_without_nans[cols].values)
 
     results = []
@@ -42,11 +37,8 @@ def feasibility(
 
 
 def constraint_violation(
-    # counterfactuals_without_nans, 
-    # factual_without_nans,
     df_decoded_cfs,
     df_factuals,
-    # inverse_transform,
     continuous,
     categorical,
     immutables,
@@ -55,10 +47,6 @@ def constraint_violation(
     def intersection(lst1, lst2):
         return list(set(lst1) & set(lst2))
 
-
-    # df_decoded_cfs = inverse_transform(counterfactuals_without_nans.copy())
-
-    # df_factuals = inverse_transform(factual_without_nans.copy())
 
     cfs_continuous_immutable = df_decoded_cfs[
         intersection(continuous, immutables)

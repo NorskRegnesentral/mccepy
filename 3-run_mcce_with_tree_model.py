@@ -11,10 +11,10 @@ from mcce import MCCE
 
 data_name = "adult"
 # data_name = 'give_me_some_credit'
-# data_name = 'compas'
+data_name = 'compas'
 
-K = 10000
-n_test = 10
+K = 1000
+n_test = 100
 
 results_all = None
 

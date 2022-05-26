@@ -152,7 +152,8 @@ class MCCE:
         self.results = self.calculate_metrics(synth=synth_positive, test=self.test_repeated, data=data, \
             model=self.model, response=response, inverse_transform=inverse_transform) 
 
-        # Find the best row for each test obs
+        ## Find the best row for each test obs
+
         results_sparse = pd.DataFrame(columns=self.results.columns)
 
         for idx in list(set(self.results.index)):
@@ -194,83 +195,36 @@ class MCCE:
         # 1) Distance: Sparsity and Euclidean distance
         factual = test[features]#.sort_index().to_numpy()
         counterfactuals = synth[features]#.sort_index().to_numpy()
-        # print(counterfactuals.head(10))
-        # print('here')
+        
+        time1 = time.time()
         distances = pd.DataFrame(metrics.distance(counterfactuals, factual, self.model), index=factual.index)
 
-        # delta = factual - counterfactuals
-
-        # d1 = np.sum(np.invert(np.isclose(delta, np.zeros_like(delta), atol=1e-5)), axis=1, dtype=float).tolist() # sparsity
-        # d2 = np.sum(np.abs(delta), axis=1, dtype=float).tolist() # manhatten distance
-        # d3 = np.sum(np.square(np.abs(delta)), axis=1, dtype=np.float).tolist() # euclidean distance
-
+        time2 = time.time()
+        self.distance_cpu_time = time2 - time1
         synth_metrics = pd.concat([synth_metrics, distances], axis=1)
-
-        # synth_metrics['L0'] = d1
-        # synth_metrics['L1'] = d2
-        # synth_metrics['L2'] = d3
 
         # 2) Feasibility 
 
         cols = data.columns.to_list()
         cols.remove(response)
-        # feas_results = []
-        # nbrs = NearestNeighbors(n_neighbors=5).fit(synth[cols].values)
 
-        # for _, row in synth[cols].iterrows():
-        #     knn = nbrs.kneighbors(row.values.reshape((1, -1)), 5, return_distance=True)[0]
-            
-        #     feas_results.append(np.mean(knn))
-
-        synth_metrics['feasibility'] = metrics.feasibility(counterfactuals, factual, cols, response)
+        time1 = time.time()
+        synth_metrics['feasibility'] = metrics.feasibility(counterfactuals, factual, cols)
+        
+        time2 = time.time()
+        self.feasibility_cpu_time = time2 - time1
 
         # 3) Success
         synth_metrics['success'] = 1
-        ## TO DO: predict again? Problem: Takes more time
-        # temp = self.model.predict(synth)
-        # synth_metrics['success'] = temp >= self.cutoff
 
         # 4) Violation
-        # check continuous using np.isclose to allow for very small numerical differences
-        
-        # def intersection(lst1, lst2):
-        #     return list(set(lst1) & set(lst2))
 
-        # cfs_continuous_fixed = df_decoded_cfs[
-        #     intersection(self.continuous, self.catalog['immutable'])
-        # ]
-
-        # factual_continuous_fixed = df_decoded_factuals[
-        #         intersection(self.continuous, self.catalog['immutable'])
-        # ]
-
-        # continuous_violations = np.invert(
-        #     np.isclose(cfs_continuous_fixed, factual_continuous_fixed)
-        # )
-        # continuous_violations = np.sum(continuous_violations, axis=1).reshape(
-        #     (-1, 1)
-        # )  # sum over features
-
-        # # check categorical by boolean comparison
-        # cfs_categorical_fixed = df_decoded_cfs[
-        #     intersection(self.categorical, self.catalog['immutable'])
-        # ]
-        # # print(cfs_categorical_immutable)
-        # factual_categorical_fixed = df_decoded_factuals[
-        #     intersection(self.categorical, self.catalog['immutable'])
-        # ]
-
-        # cfs_categorical_fixed.sort_index(inplace=True)
-        # factual_categorical_fixed.sort_index(inplace=True)
-        # cfs_categorical_fixed.index.name = None
-
-        # categorical_violations = cfs_categorical_fixed != factual_categorical_fixed
-        # categorical_violations = np.sum(categorical_violations.values, axis=1).reshape(
-        #     (-1, 1)
-        # )
-
+        time1 = time.time()
         violations = metrics.constraint_violation(df_decoded_cfs, df_decoded_factuals, \
             self.continuous, self.categorical, self.catalog['immutable'])
         
-        synth_metrics['violation'] = violations # continuous_violations + categorical_violations
+        synth_metrics['violation'] = violations
+        time2 = time.time()
+        self.violation_cpu_time = time2 - time1
+
         return synth_metrics

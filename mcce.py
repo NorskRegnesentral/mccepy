@@ -208,7 +208,7 @@ class MCCE:
         cols.remove(response)
 
         time1 = time.time()
-        synth_metrics['feasibility'] = metrics.feasibility(counterfactuals, factual, cols)
+        synth_metrics['feasibility'] = metrics.feasibility(counterfactuals, data, cols)
         
         time2 = time.time()
         self.feasibility_cpu_time = time2 - time1

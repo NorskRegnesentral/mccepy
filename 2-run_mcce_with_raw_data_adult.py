@@ -56,7 +56,6 @@ dataset = CsvCatalog(file_path="Data/train_not_normalized_data_from_carla.csv",
                      target='income',
                      encoding_method="OneHot_drop_first", # New!
                      )
-dataset.catalog = {'target': dataset.target, 'continuous': dataset.continuous, 'categorical': dataset.categorical, 'immutable': dataset.immutables}
 
 ## Fit predictive model
 
@@ -92,7 +91,8 @@ cont_feat = dataset.continuous
 cat_feat = dataset.categorical
 cat_feat_encoded = dataset.encoder.get_feature_names(dataset.categorical)
 
-fixed_features = ['age', 'sex_1']
+fixed_features_encoded = ['age', 'sex_1']
+fixed_features = ['age', 'sex']
 
 #  Create dtypes for MCCE()
 dtypes = dict([(x, "float") for x in cont_feat])
@@ -102,16 +102,14 @@ df = (dataset.df).astype(dtypes)
 
 
 start = time.time()
+mcce = MCCE(fixed_features=fixed_features,\
+    fixed_features_encoded=fixed_features_encoded,
+        continuous=dataset.continuous, categorical=dataset.categorical,\
+            model=ml_model, seed=1)
 
-# fixed_features = names in dataset
-# categorical = original feature names
+mcce.fit(df.drop(dataset.target, axis=1), dtypes)
 
-mcce = MCCE(fixed_features=fixed_features, continuous=dataset.continuous, categorical=dataset.categorical,\
-            model=ml_model, seed=1, catalog=dataset.catalog)
-
-mcce.fit(df.drop(y_col, axis=1), dtypes)
-
-synth_df = mcce.generate(test_factual.drop(y_col, axis=1), k=K)
+synth_df = mcce.generate(test_factual.drop(dataset.target, axis=1), k=100)
 
 
 # ----------------------------------------------------------------
@@ -119,9 +117,9 @@ synth_df = mcce.generate(test_factual.drop(y_col, axis=1), k=K)
 
 # ------------- postprocess() -----------------
 
-data = df
-synth = synth_df
-test = test_factual
+data = df.copy()
+synth = synth_df.copy()
+test = test_factual.copy()
 response = y_col
 inverse_transform = dataset.inverse_transform
 cutoff = 0.5
@@ -145,8 +143,8 @@ test_repeated.drop(['N'], axis=1, inplace=True)
 
 # --------------- calculate_metrics() -----------------
 
-synth = synth_positive
-test = test_repeated
+synth = synth_positive.copy()
+test = test_repeated.copy()
 
 features = synth.columns.to_list()
 features.remove(response)
@@ -164,13 +162,14 @@ cols.drop(response)
 
 # 1) Distance: Sparsity and Euclidean distance
 
-factual = test_inverse_transform[features_inverse_transform].sort_index().to_numpy()
-counterfactuals = synth_inverse_transform[features_inverse_transform].sort_index().to_numpy()
+# factual = test_inverse_transform[features_inverse_transform].sort_index().to_numpy()
+# counterfactuals = synth_inverse_transform[features_inverse_transform].sort_index().to_numpy()
 
-cfs_continuous = synth_inverse_transform[dataset.continuous].sort_index().to_numpy()
+# We don't transform the continuous features or the Euclidean distance will be wrong 
+cfs_continuous = synth[dataset.continuous].sort_index().to_numpy()
 cfs_categorical = synth_inverse_transform[dataset.categorical].sort_index().to_numpy()
 
-factual_continuous = test_inverse_transform[dataset.continuous].sort_index().to_numpy()
+factual_continuous = test[dataset.continuous].sort_index().to_numpy()
 factual_categorical = test_inverse_transform[dataset.categorical].sort_index().to_numpy()
 
 
@@ -191,7 +190,7 @@ synth_metrics['L2'] = d3
 # 2) Feasibility 
 
 feas_results = []
-nbrs = NearestNeighbors(n_neighbors=5).fit(synth[cols].values)
+nbrs = NearestNeighbors(n_neighbors=5).fit(data[cols].values)
 
 for i, row in synth[cols].iterrows():
     knn = nbrs.kneighbors(row.values.reshape((1, -1)), 5, return_distance=True)[0]

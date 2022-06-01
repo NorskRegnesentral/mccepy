@@ -208,7 +208,7 @@ for x in cat_feat_encoded:
 df = (dataset.df).astype(dtypes)
 ```
 
-4. Initialize MCCE object and generate counterfactual explanations using CART
+5. Initialize MCCE object and generate counterfactual explanations using CART
 
 ```Python
 from mcce import MCCE
@@ -227,7 +227,7 @@ mcce.postprocess(data=df, synth=synth_df, test=test_factual, response=y_col, \
 
 ```
 
-5. Postprocess generated counterfactuals and inverse transform them back to their original feature ranges
+6. Postprocess generated counterfactuals and inverse transform them back to their original feature ranges
 
 ```Python
 results = mcce.results_sparse

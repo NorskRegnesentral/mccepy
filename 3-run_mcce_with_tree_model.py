@@ -100,11 +100,14 @@ cat_feat = dataset.categorical
 cat_feat_encoded = dataset.encoder.get_feature_names(dataset.categorical)
 
 if data_name == 'adult': 
-    fixed_features = ['age', 'sex_Male']
+    fixed_features_encoded = ['age', 'sex_Male']
+    fixed_features = ['age', 'sex']
 elif data_name == 'give_me_some_credit':
+    fixed_features_encoded = ['age']
     fixed_features = ['age']
 elif data_name == 'compas':
-    fixed_features = ['age', 'sex_Male', 'race_Other']
+    fixed_features_encoded = ['age', 'sex_Male', 'race_Other']
+    fixed_features = ['age', 'sex', 'race']
 
 #  Create dtypes for MCCE()
 dtypes = dict([(x, "float") for x in cont_feat])
@@ -116,16 +119,15 @@ df = (dataset.df).astype(dtypes)
 
 import time
 start = time.time()
-# fixed_features = names in dataset
-# categorical = original feature names
 
-mcce = MCCE(fixed_features=fixed_features, continuous=dataset.continuous, categorical=dataset.categorical,\
-            model=ml_model, seed=1, catalog=dataset.catalog)
+mcce = MCCE(fixed_features=fixed_features,\
+        fixed_features_encoded=fixed_features_encoded,
+            continuous=dataset.continuous, categorical=dataset.categorical,\
+                model=ml_model, seed=1)
 
-mcce.fit(df.drop(y_col, axis=1), dtypes)
+mcce.fit(df.drop(dataset.target, axis=1), dtypes)
 
-synth_df = mcce.generate(test_factual.drop(y_col, axis=1), k=K)
-
+synth_df = mcce.generate(test_factual.drop(dataset.target, axis=1), k=100)
 mcce.postprocess(data=df, synth=synth_df, test=test_factual, response=y_col, \
     inverse_transform=dataset.inverse_transform, cutoff=0.5)
 

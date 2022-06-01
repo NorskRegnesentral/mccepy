@@ -41,7 +41,7 @@ def constraint_violation(
     df_factuals,
     continuous,
     categorical,
-    immutables,
+    fixed_features,
     ):
     
     def intersection(lst1, lst2):
@@ -49,10 +49,10 @@ def constraint_violation(
 
 
     cfs_continuous_immutable = df_decoded_cfs[
-        intersection(continuous, immutables)
+        intersection(continuous, fixed_features)
     ]
     factual_continuous_immutable = df_factuals[
-        intersection(continuous, immutables)
+        intersection(continuous, fixed_features)
     ]
 
     continuous_violations = np.invert(
@@ -64,10 +64,10 @@ def constraint_violation(
 
     # check categorical by boolean comparison
     cfs_categorical_immutable = df_decoded_cfs[
-        intersection(categorical, immutables)
+        intersection(categorical, fixed_features)
     ]
     factual_categorical_immutable = df_factuals[
-        intersection(categorical, immutables)
+        intersection(categorical, fixed_features)
     ]
 
     categorical_violations = cfs_categorical_immutable != factual_categorical_immutable

@@ -13,21 +13,21 @@ METHODS_MAP = {'cart': CARTMethod, 'sample': SampleMethod}
 class MCCE:
     def __init__(self,
                  fixed_features=None,
+                 fixed_features_encoded=None,
                  continuous=None,
                  categorical=None,
                  model=None,
-                 seed=None,
-                 catalog=None
+                 seed=None
                  ):
 
         # initialise arguments
         self.fixed_features = fixed_features  # features to condition on - the ones in the dataset
+        self.fixed_features_encoded = fixed_features_encoded
         self.continuous = continuous
         self.categorical = categorical
 
         self.seed = seed
         self.model = model
-        self.catalog = catalog #  includes the fixed feature names before the transformation
 
         self.method = None
         self.visit_sequence = None
@@ -39,13 +39,13 @@ class MCCE:
         self.df_columns = df.columns.tolist()
         self.n_df_rows, self.n_df_columns = np.shape(df)
         self.df_dtypes = dtypes
-        self.mutable_features = [col for col in self.df_columns if (col not in self.fixed_features)]
+        self.mutable_features = [col for col in self.df_columns if (col not in self.fixed_features_encoded)]
         self.cont_feat = [feat for feat in dtypes.keys() if dtypes[feat] != 'category']
 
-        self.n_fixed, self.n_mutable = len(self.fixed_features), len(self.mutable_features)
+        self.n_fixed, self.n_mutable = len(self.fixed_features_encoded), len(self.mutable_features)
         
         # column indices of mutable features
-        self.visit_sequence = [index for index, col in enumerate(self.df_columns) if (col in self.fixed_features)] # if (col in self.mutable_features)
+        self.visit_sequence = [index for index, col in enumerate(self.df_columns) if (col in self.fixed_features_encoded)] # if (col in self.mutable_features)
         for index, col in enumerate(self.df_columns):
             if col in self.mutable_features:
                 self.visit_sequence.append(index)
@@ -59,7 +59,7 @@ class MCCE:
         # create list of methods to use - currently only cart implemented
         self.method = []
         for col in self.visited_columns:
-            if col in self.fixed_features:
+            if col in self.fixed_features_encoded:
                 self.method.append('sample') # these will be fit but not sampled 
             else:
                 self.method.append('cart')
@@ -102,7 +102,7 @@ class MCCE:
         n_test = test.shape[0]
 
         # create data set with the fixed features repeated k times
-        synth_df = test[self.fixed_features]
+        synth_df = test[self.fixed_features_encoded]
         synth_df = pd.concat([synth_df] * self.k)
         synth_df.sort_index(inplace=True)
 
@@ -150,7 +150,7 @@ class MCCE:
         self.test_repeated = test_repeated
 
         self.results = self.calculate_metrics(synth=synth_positive, test=self.test_repeated, data=data, \
-            model=self.model, response=response, inverse_transform=inverse_transform) 
+            response=response, inverse_transform=inverse_transform) 
 
         ## Find the best row for each test obs
 
@@ -175,7 +175,7 @@ class MCCE:
 
         self.results_sparse = results_sparse
 
-    def calculate_metrics(self, synth, test, data, model, response, inverse_transform):
+    def calculate_metrics(self, synth, test, data, response, inverse_transform):
 
         features = synth.columns.to_list()
         features.remove(response)
@@ -219,7 +219,7 @@ class MCCE:
         # 4) Violation
         time1 = time.time()
         violations = metrics.constraint_violation(df_decoded_cfs, df_decoded_factuals, \
-            self.continuous, self.categorical, self.catalog['immutable'])
+            self.continuous, self.categorical, self.fixed_features)
         
         synth_metrics['violation'] = violations
         time2 = time.time()

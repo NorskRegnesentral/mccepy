@@ -96,7 +96,7 @@ In case you want to use MCCE without CARLA, use the following steps.
 Download a data set, like the [US adult census dataset](https://archive.ics.uci.edu/ml/datasets/adult). Add the dataset to a local repository and save the path to the data. 
 
 
-1. Initialize Data object with path to the data file, column names, feature types, a list of fixed features, and potential encoding and scaling methods. 
+1. Initialize Data object with path to the data file, column names, feature types, response name, a list of fixed features, and potential encoding and scaling methods. 
 
 ```Python
 from data import Data
@@ -110,10 +110,11 @@ dtypes = {"age": "float", "workclass": "category", "fnlwgt": "float", "degree": 
         "relationship": "category", "race": "category", \
             "sex": "category", "capital-gain": "float", "capital-loss": "float", \
                 "hours": "float", "country": "category", "income": "category"}
+response = 'income'
 
 fixed_features = ['age', 'sex']
-dataset = Data(path, feature_order, dtypes, fixed_features, "OneHot_drop_first", "MinMax")
 
+dataset = Data(path, feature_order, dtypes, response, fixed_features, "OneHot_drop_first", "MinMax")
 ```
 
 2. Define a predictive model class and fit the model. 
@@ -127,7 +128,7 @@ class RandomForestModel():
     https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html"""
 
     def __init__(self, data):
-        
+
         df_train = data.df
         
         x_train = df_train[data.continuous + data.categorical_encoded]
@@ -180,10 +181,11 @@ ml_model = RandomForestModel(dataset)
 
 ```
 
-3. Decide which customers to generate counterfactual explanations for
+3. Decide which customers to generate counterfactual explanations for.
 
 ```Python
 import numpy as np
+
 preds = ml_model.predict_proba(dataset.df)[:,1]
 factual_id = np.where(preds < 0.5)
 factuals = dataset.df.loc[factual_id]
@@ -200,7 +202,6 @@ cont_feat = dataset.continuous
 cat_feat = dataset.categorical
 cat_feat_encoded = dataset.categorical_encoded
 
-#  Create dtypes for MCCE()
 dtypes = dict([(x, "float") for x in cont_feat])
 for x in cat_feat_encoded:
     dtypes[x] = "category"
@@ -210,8 +211,6 @@ df = (dataset.df).astype(dtypes)
 4. Initialize MCCE object and generate counterfactual explanations using CART
 
 ```Python
-from mcce import MCCE
-
 from mcce import MCCE
 
 mcce = MCCE(fixed_features=dataset.fixed_features,\
@@ -231,8 +230,57 @@ mcce.postprocess(data=df, synth=synth_df, test=test_factual, response=y_col, \
 5. Postprocess generated counterfactuals and inverse transform them back to their original feature ranges
 
 ```Python
-results = mcce.results_sparse#[[dataset.feature_order]]
+results = mcce.results_sparse
 dataset.inverse_transform(results)
 
+```
+Original feature values for five test observations
+```Python
+    age    fnlwgt  education-num  capital-gain  capital-loss  hours-per-week  \
+0  39.0   77516.0           13.0        2174.0           0.0            40.0   
+2  38.0  215646.0            9.0           0.0           0.0            40.0   
+3  53.0  234721.0            7.0           0.0           0.0            40.0   
+4  28.0  338409.0           13.0           0.0           0.0            40.0   
+5  37.0  284582.0           14.0           0.0           0.0            40.0   
+
+   income  workclass  marital-status  occupation  relationship  race  sex  \
+0       0          3               1           3             1     0    0   
+2       0          0               2           3             1     0    0   
+3       0          0               0           3             0     1    0   
+4       0          0               0           0             3     1    1   
+5       0          0               0           2             3     0    1   
+
+   country  
+0        0  
+2        0  
+3        0  
+4        3  
+5        0
+
+```
+
+
+Nearest counterfactuals for five test observations
+```Python
+    age  workclass     fnlwgt  education-num  marital-status  occupation  \
+0  39.0          3  1455435.0           13.0               0           3   
+2  38.0          0   248694.0           10.0               0           3   
+3  53.0          0   215990.0            9.0               0           3   
+4  28.0          0   132686.0           14.0               0           0   
+5  37.0          0   336880.0           14.0               0           2   
+
+   relationship  race  sex  capital-gain  capital-loss  hours-per-week  \
+0             0     0    0           0.0           0.0            72.0   
+2             0     0    0           0.0           0.0            40.0   
+3             0     0    0           0.0           0.0            40.0   
+4             0     0    1           0.0           0.0            40.0   
+5             0     0    1           0.0           0.0            60.0   
+
+   country income  
+0        0      1  
+2        0      1  
+3        0      1  
+4        0      1  
+5        0      1
 ```
 

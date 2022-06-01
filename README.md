@@ -236,26 +236,26 @@ dataset.inverse_transform(results)
 ```
 Original feature values for five test observations
 ```Python
-    age    fnlwgt  education-num  capital-gain  capital-loss  hours-per-week  \
-0  39.0   77516.0           13.0        2174.0           0.0            40.0   
-2  38.0  215646.0            9.0           0.0           0.0            40.0   
-3  53.0  234721.0            7.0           0.0           0.0            40.0   
-4  28.0  338409.0           13.0           0.0           0.0            40.0   
-5  37.0  284582.0           14.0           0.0           0.0            40.0   
+    age  workclass    fnlwgt  education-num  marital-status  occupation  \
+0  39.0          3   77516.0           13.0               1           3   
+2  38.0          0  215646.0            9.0               2           3   
+3  53.0          0  234721.0            7.0               0           3   
+4  28.0          0  338409.0           13.0               0           0   
+5  37.0          0  284582.0           14.0               0           2   
 
-   income  workclass  marital-status  occupation  relationship  race  sex  \
-0       0          3               1           3             1     0    0   
-2       0          0               2           3             1     0    0   
-3       0          0               0           3             0     1    0   
-4       0          0               0           0             3     1    1   
-5       0          0               0           2             3     0    1   
+   relationship  race  sex  capital-gain  capital-loss  hours-per-week  \
+0             1     0    0        2174.0           0.0            40.0   
+2             1     0    0           0.0           0.0            40.0   
+3             0     1    0           0.0           0.0            40.0   
+4             3     1    1           0.0           0.0            40.0   
+5             3     0    1           0.0           0.0            40.0   
 
-   country  
-0        0  
-2        0  
-3        0  
-4        3  
-5        0
+   country  income  
+0        0       0  
+2        0       0  
+3        0       0  
+4        3       0  
+5        0       0
 
 ```
 

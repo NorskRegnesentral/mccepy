@@ -58,6 +58,7 @@ class Data():
 
         # Can we get the fixed feature names after the transformation?
         self.categorical_encoded = self.encoder.get_feature_names(self.categorical).tolist()
+
         fixed_features_encoded = []
         for fixed in fixed_features:
             if fixed in self.categorical:

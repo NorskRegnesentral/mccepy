@@ -15,7 +15,7 @@ python setup.py install
 
 ## Examples
 
-### Use MCCE with the [CARLA](https://github.com/carla-recourse/CARLA) python package
+### A. Use MCCE with the [CARLA](https://github.com/carla-recourse/CARLA) python package
 
 1.  Load packages and Adult data set
 
@@ -52,7 +52,7 @@ factuals = predict_negative_instances(ml_model, dataset.df)
 test_factual = factuals.iloc[:5]
 ```
 
-3. Specify feature names and generate counterfactuals with MCCE
+3. Create data objects to pass to MCCE
 
 ```Python
 y_col = dataset.target
@@ -78,26 +78,25 @@ mcce = MCCE(fixed_features=fixed_features, continuous=dataset.continuous, catego
 
 mcce.fit(df.drop(y_col, axis=1), dtypes) # fit the decision trees
 
-synth_df = mcce.generate(test_factual.drop(y_col, axis=1), k=100) # samples 100 times for each test observation
+synth_df = mcce.generate(test_factual.drop(y_col, axis=1), k=100) # for each test obs
 
 mcce.postprocess(data=df, synth=synth_df, test=test_factual, response=y_col, \
     inverse_transform=dataset.inverse_transform, cutoff=0.5) # postprocess the samples
 
-# print best counterfactual for each test observation
+# print average metrics across all test observations
 print([mcce.results_sparse.L0.mean(), mcce.results_sparse.L2.mean(), mcce.results_sparse.feasibility.mean(),\
   mcce.results_sparse.violation.mean(), mcce.results_sparse.shape[0]])
     
 ```
 
-### Use MCCE stand alone
+### B. Use MCCE stand alone
 
 In case you want to use MCCE without CARLA, use the following steps. 
 
-### Adult dataset
-Download the [US adult census dataset](https://archive.ics.uci.edu/ml/datasets/adult). Add the dataset to a local repository and save the path to the data. 
+Download a data set, like the [US adult census dataset](https://archive.ics.uci.edu/ml/datasets/adult). Add the dataset to a local repository and save the path to the data. 
 
 
-1. Initialize Data object with path to the data file, column names, feature types, response name, and a list of fixed features. 
+1. Initialize Data object with path to the data file, column names, feature types, a list of fixed features, and potential encoding and scaling methods. 
 
 ```Python
 from data import Data
@@ -112,10 +111,8 @@ dtypes = {"age": "float", "workclass": "category", "fnlwgt": "float", "degree": 
             "sex": "category", "capital-gain": "float", "capital-loss": "float", \
                 "hours": "float", "country": "category", "income": "category"}
 
-response = 'income'
-
 fixed_features = ['age', 'sex']
-dataset = Data(path, feature_order, dtypes, response, fixed_features, "OneHot_drop_first", "MinMax")
+dataset = Data(path, feature_order, dtypes, fixed_features, "OneHot_drop_first", "MinMax")
 
 ```
 
@@ -123,28 +120,24 @@ dataset = Data(path, feature_order, dtypes, response, fixed_features, "OneHot_dr
 
 
 ```Python
-from carla import MLModel
 from sklearn.ensemble import RandomForestClassifier
 
-class RandomForestModel(MLModel):
+class RandomForestModel():
     """The default way of implementing RandomForest from sklearn
     https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html"""
 
     def __init__(self, data):
-        super().__init__(data)
-
-        # get preprocessed data
-        df_train = self.data.df
         
+        df_train = data.df
         
         x_train = df_train[data.continuous + data.categorical_encoded]
         y_train = df_train[data.target]
 
-        self._feature_input_order = self.data.continuous + self.data.categorical_encoded
+        self._feature_input_order = data.continuous + data.categorical_encoded
 
         param = {
             "max_depth": None,  # determines how deep the tree can go
-            "n_estimators": 5,
+            "n_estimators": 5, # number of trees
             "min_samples_split": 3 # number of features to consider at each split
         }
         self._mymodel = RandomForestClassifier(**param)
@@ -179,6 +172,9 @@ class RandomForestModel(MLModel):
 
     def predict_proba(self, x):
         return self._mymodel.predict_proba(self.get_ordered_features(x))
+    
+    def get_ordered_features(self, x):
+        return x[self.feature_input_order]
 
 ml_model = RandomForestModel(dataset)
 
@@ -196,6 +192,7 @@ test_factual = factuals.iloc[:5]
 ```
 
 4. Create data objects to pass to MCCE
+
 ```Python
 y_col = dataset.target
 cont_feat = dataset.continuous

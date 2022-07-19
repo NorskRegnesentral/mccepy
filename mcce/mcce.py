@@ -2,8 +2,8 @@ import time
 import numpy as np
 import pandas as pd
 
-from cart import CARTMethod
-from sample import SampleMethod
+from mcce.cart import CARTMethod
+from mcce.sample import SampleMethod
 from sklearn.neighbors import NearestNeighbors
 
 import metrics

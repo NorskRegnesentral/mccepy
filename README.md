@@ -10,7 +10,7 @@ Python package to generate counterfactuals using Monte Carlo sampling of realist
 git clone git@github.com:NorskRegnesentral/mccepy.git
 cd mccepy
 pip install -r requirements.txt
-python setup.py install
+pip install -e .
 ```
 
 ## Examples

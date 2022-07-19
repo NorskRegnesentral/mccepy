@@ -9,7 +9,7 @@ def distance(counterfactuals_without_nans, factual_without_nans, ml_model):
 
     delta = arr_f - arr_cf 
 
-    d1 = np.sum(np.invert(np.isclose(delta, np.zeros_like(delta))), axis=1, dtype=np.float).tolist()
+    d1 = np.sum(np.invert(np.isclose(delta, np.zeros_like(delta), atol=1e-05)), axis=1, dtype=np.float).tolist()
     d1_old = np.sum(delta.round(2) != 0, axis=1, dtype=np.float).tolist()
 
     d2 = np.sum(np.abs(delta), axis=1, dtype=np.float).tolist()

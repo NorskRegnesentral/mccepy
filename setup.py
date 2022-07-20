@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 from distutils.core import setup
 
 setup(
-  name="mccepy", 
+  name="mcce", 
   version="0.1.0",
   author="Annabelle Redelmeier",
   author_email="anr@nr.no",

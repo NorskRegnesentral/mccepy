@@ -1,5 +1,5 @@
 import numpy as np
-from method import Method
+from .method import Method
 
 NUM_COLS_DTYPES = ['int', 'float', 'datetime']
 CAT_COLS_DTYPES = ['category', 'bool']

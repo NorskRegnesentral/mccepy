@@ -2,11 +2,11 @@ import time
 import numpy as np
 import pandas as pd
 
-from cart import CARTMethod
-from sample import SampleMethod
+from .cart import CARTMethod
+from .sample import SampleMethod
 from sklearn.neighbors import NearestNeighbors
 
-import metrics
+from .metrics import distance, feasibility, constraint_violation, success_rate
 
 METHODS_MAP = {'cart': CARTMethod, 'sample': SampleMethod}
 
@@ -197,7 +197,7 @@ class MCCE:
         counterfactuals = synth[features]#.sort_index().to_numpy()
         
         time1 = time.time()
-        distances = pd.DataFrame(metrics.distance(counterfactuals, factual, self.model), index=factual.index)
+        distances = pd.DataFrame(distance(counterfactuals, factual, self.model), index=factual.index)
 
         time2 = time.time()
         self.distance_cpu_time = time2 - time1
@@ -208,7 +208,7 @@ class MCCE:
         cols.remove(response)
 
         time1 = time.time()
-        synth_metrics['feasibility'] = metrics.feasibility(counterfactuals, data, cols)
+        synth_metrics['feasibility'] = feasibility(counterfactuals, data, cols)
         
         time2 = time.time()
         self.feasibility_cpu_time = time2 - time1
@@ -218,7 +218,7 @@ class MCCE:
 
         # 4) Violation
         time1 = time.time()
-        violations = metrics.constraint_violation(df_decoded_cfs, df_decoded_factuals, \
+        violations = constraint_violation(df_decoded_cfs, df_decoded_factuals, \
             self.continuous, self.categorical, self.fixed_features)
         
         synth_metrics['violation'] = violations

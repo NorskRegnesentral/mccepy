@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from method import Method
+from .method import Method
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 
 

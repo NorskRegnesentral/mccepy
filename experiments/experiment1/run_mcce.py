@@ -1,12 +1,11 @@
 import os
 import argparse
 import time
+import torch
 
 from carla.data.catalog import OnlineCatalog
 from carla.models.catalog import MLModelCatalog
 from carla.models.negative_instances import predict_negative_instances
-
-import torch
 
 from mcce import MCCE
 
@@ -41,7 +40,6 @@ args = parser.parse_args()
 n_test = args.number_of_samples
 seed = 1
 K = args.k
-results_all = None
 
 # Use CARLA to load dataset and predictive model
 print("Loading data from Carla...")

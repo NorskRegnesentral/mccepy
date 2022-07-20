@@ -13,13 +13,13 @@ import pandas as pd
 
 PATH = "../../Results_test/experiment2/"
 
-n_test = 10
-K = 100
+n_test = 100
+K = 10000
 
 # Load raw data
 
-train_path = "Data/adult.data"
-test_path = "Data/adult.test"
+train_path = "../../Data/adult.data"
+test_path = "../../Data/adult.test"
 train = pd.read_csv(train_path, sep=", ", header=None, names=['age', 'workclass', 'fnlwgt', 'education', 'education-num', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'capital-gain', 'capital-loss', 'hours-per-week', 'native-country', 'income'])
 test = pd.read_csv(test_path, skiprows=1, sep=", ", header=None, names=['age', 'workclass', 'fnlwgt', 'education', 'education-num', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'capital-gain', 'capital-loss', 'hours-per-week', 'native-country', 'income'])
 
@@ -44,7 +44,7 @@ for feature in ["workclass", "marital-status", "occupation", "relationship", \
     mapping = d.to_dict()
     df[feature] = [mapping[item] for item in df[feature]]
 
-df.to_csv("Data/train_not_normalized_data_from_carla.csv", index=False)
+df.to_csv("../../Data/train_not_normalized_data_from_carla.csv", index=False)
 
 ## Read in data using CARLA package
 
@@ -52,7 +52,7 @@ continuous = ["age", "fnlwgt", "education-num", "capital-gain", "hours-per-week"
 categorical = ["marital-status", "native-country", "occupation", "race", "relationship", "sex", "workclass"]
 immutable = ["age", "sex"]
 
-dataset = CsvCatalog(file_path="Data/train_not_normalized_data_from_carla.csv",
+dataset = CsvCatalog(file_path="../../Data/train_not_normalized_data_from_carla.csv",
                      continuous=continuous,
                      categorical=categorical,
                      immutables=immutable,
@@ -76,7 +76,7 @@ learning_rate=0.002,
 epochs=20,
 batch_size=1024,
 hidden_size=[18, 9, 3],
-force_train=True, # don't forget to add this or it might load an older model from disk
+force_train=True,
 )
 
 ## Find factuals to generate counterfactuals for

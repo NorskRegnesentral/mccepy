@@ -1,27 +1,50 @@
 import time
 import os
+import argparse
+
 from sklearn import metrics
 from sklearn.ensemble import RandomForestClassifier
 
 from carla.data.catalog import OnlineCatalog
 from carla.models.negative_instances import predict_negative_instances
-from carla import MLModel
 
-from mcce import MCCE
+from mcce.mcce import MCCE
 
 PATH = "../../Results_test/experiment3/"
 
-data_name = "adult"
-# data_name = 'give_me_some_credit'
-data_name = 'compas'
+parser = argparse.ArgumentParser(description="Fit MCCE with various datasets.")
+parser.add_argument(
+    "-d",
+    "--dataset",
+    nargs="*",
+    default=["adult"],
+    choices=["adult", "give_me_some_credit", "compas"],
+    help="Datasets for experiment",
+)
+parser.add_argument(
+    "-n",
+    "--number_of_samples",
+    type=int,
+    default=10,
+    help="Number of instances per dataset",
+)
+parser.add_argument(
+    "-k",
+    "--k",
+    type=int,
+    default=100,
+    help="Number generated counterfactuals per test observation",
+)
 
-K = 1000
-n_test = 100
+args = parser.parse_args()
 
-results_all = None
+n_test = args.number_of_samples
+K = args.k
+data_name = args.dataset
 
 dataset = OnlineCatalog(data_name)
 
+# Fit predictive model
 class RandomForestModel(MLModel):
     """The default way of implementing RandomForest from sklearn
     https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html"""
@@ -78,8 +101,6 @@ class RandomForestModel(MLModel):
 
     def predict_proba(self, x):
         return self._mymodel.predict_proba(self.get_ordered_features(x))
-
-# Fit predictive model
 
 ml_model = RandomForestModel(dataset)
 

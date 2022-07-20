@@ -7,6 +7,7 @@ from sklearn.ensemble import RandomForestClassifier
 
 from carla.data.catalog import OnlineCatalog
 from carla.models.negative_instances import predict_negative_instances
+from carla import MLModel
 
 from mcce.mcce import MCCE
 
@@ -38,9 +39,9 @@ parser.add_argument(
 
 args = parser.parse_args()
 
+data_name = args.dataset
 n_test = args.number_of_samples
 K = args.k
-data_name = args.dataset
 
 dataset = OnlineCatalog(data_name)
 

@@ -7,9 +7,9 @@ from carla.data.catalog import OnlineCatalog
 from carla.models.catalog import MLModelCatalog
 from carla.models.negative_instances import predict_negative_instances
 
-from mcce import MCCE
+from mcce.mcce import MCCE
 
-PATH = '../../Results2/experiment1/'
+PATH = 'Results_Test2/experiment1/'
 
 parser = argparse.ArgumentParser(description="Fit MCCE with various datasets.")
 parser.add_argument(
@@ -38,8 +38,8 @@ parser.add_argument(
 args = parser.parse_args()
 
 n_test = args.number_of_samples
+K = args.k # 1000 for Compas
 seed = 1
-K = args.k
 
 # Use CARLA to load dataset and predictive model
 print("Loading data from Carla...")
@@ -130,7 +130,7 @@ for data_name in args.dataset:
     mcce.results_sparse['time (seconds)'] = timing
 
     # (5) Save results 
-    mcce.results_sparse.to_csv(os.path.join(PATH, "{data_name}_mcce_results_k_{K}_n_{n_test}.csv"))
+    mcce.results_sparse.to_csv(os.path.join(PATH, f"{data_name}_mcce_results_k_{K}_n_{n_test}.csv"))
     
     # (6) Print the counterfactuals inverted to their original feature values/ranges
     results = mcce.results_sparse.copy()

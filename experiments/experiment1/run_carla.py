@@ -9,7 +9,7 @@ import carla.recourse_methods.catalog as recourse_catalog
 
 import torch
 
-PATH = '../../Results2/experiment1/'
+PATH = '../../Results_Test/experiment1/'
 
 def save_csv(df, data_name):
     file_name = os.path.join(PATH, f"{data_name}_manifold_results.csv")

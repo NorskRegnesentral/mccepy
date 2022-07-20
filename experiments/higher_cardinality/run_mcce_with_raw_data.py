@@ -1,20 +1,42 @@
-import torch
-import time
-import os
-
 from sklearn.neighbors import NearestNeighbors
-from mcce import MCCE
+
 from carla.data.catalog import CsvCatalog
 from carla.models.catalog import MLModelCatalog
 from carla.models.negative_instances import predict_negative_instances
 
+import torch
+import time
+import os
+import argparse
 import numpy as np
 import pandas as pd
 
+from mcce.mcce import MCCE
+
 PATH = "../../Results_test/experiment2/"
 
-n_test = 100
-K = 10000
+parser = argparse.ArgumentParser(description="Fit MCCE with various datasets.")
+parser.add_argument(
+    "-n",
+    "--number_of_samples",
+    type=int,
+    default=100,
+    help="Number of instances per dataset",
+)
+parser.add_argument(
+    "-k",
+    "--k",
+    type=int,
+    default=10000,
+    help="Number generated counterfactuals per test observation",
+)
+
+args = parser.parse_args()
+
+n_test = args.number_of_samples
+K = args.k
+seed = 1
+
 
 # Load raw data
 

@@ -98,71 +98,72 @@ test_factual = factuals.iloc[:100]
 
 print("Compute metrics for CARLA methods")
 
-# carla_results = pd.DataFrame()
-# for method in ['cchvae', 'cem-vae', 'revise', 'clue', 'crud', 'face']:
-#     cfs = pd.read_csv(os.path.join(path, f"{data_name}_manifold_results.csv"), index_col=0)
-#     factuals = predict_negative_instances(ml_model, dataset.df)
-#     test_factual = factuals.iloc[:100]
+carla_results = pd.DataFrame()
+for method in ['cchvae', 'cem-vae', 'revise', 'clue', 'crud', 'face']:
+    cfs = pd.read_csv(os.path.join(path, f"{data_name}_manifold_results.csv"), index_col=0)
+    factuals = predict_negative_instances(ml_model, dataset.df)
+    test_factual = factuals.iloc[:100]
 
-#     df_cfs = cfs[cfs['method'] == method].drop(['method',	'data'], axis=1)
+    df_cfs = cfs[cfs['method'] == method].drop(['method',	'data'], axis=1)
 
-#     # missing values
-#     nan_idx = df_cfs.index[df_cfs.isnull().any(axis=1)]
-#     non_nan_idx = df_cfs.index[~(df_cfs.isnull()).any(axis=1)]
+    # missing values
+    nan_idx = df_cfs.index[df_cfs.isnull().any(axis=1)]
+    non_nan_idx = df_cfs.index[~(df_cfs.isnull()).any(axis=1)]
 
-#     output_factuals = test_factual.copy()
-#     output_counterfactuals = df_cfs.copy()
+    output_factuals = test_factual.copy()
+    output_counterfactuals = df_cfs.copy()
 
-#     factual_without_nans = output_factuals.drop(index=nan_idx)
-#     counterfactuals_without_nans = output_counterfactuals.drop(index=nan_idx)
+    factual_without_nans = output_factuals.drop(index=nan_idx)
+    counterfactuals_without_nans = output_counterfactuals.drop(index=nan_idx)
 
-#     # counterfactuals
-#     results = pd.concat([dataset.inverse_transform(counterfactuals_without_nans)])
-#     results['method'] = method
-#     results['data'] = data_name
+    # counterfactuals
+    results = pd.concat([dataset.inverse_transform(counterfactuals_without_nans)])
+    results['method'] = method
+    results['data'] = data_name
 
-#     # distances
-#     distances = pd.DataFrame(distance(counterfactuals_without_nans, factual_without_nans, ml_model))
-#     distances.set_index(non_nan_idx, inplace=True)
-#     results = pd.concat([results, distances], axis=1)
+    # distances
+    distances = pd.DataFrame(distance(counterfactuals_without_nans, factual_without_nans, ml_model))
+    distances.set_index(non_nan_idx, inplace=True)
+    results = pd.concat([results, distances], axis=1)
 
-#     results['feasibility'] = feasibility(counterfactuals_without_nans, factual_without_nans, \
-#         dataset.df.columns)
+    results['feasibility'] = feasibility(counterfactuals_without_nans, factual_without_nans, \
+        dataset.df.columns)
         
-#     # violations
-#     violations = []
+    # violations
+    violations = []
 
-#     df_decoded_cfs = dataset.inverse_transform(counterfactuals_without_nans)
-#     df_factuals = dataset.inverse_transform(factual_without_nans)
+    df_decoded_cfs = dataset.inverse_transform(counterfactuals_without_nans)
+    df_factuals = dataset.inverse_transform(factual_without_nans)
     
-#     total_violations = constraint_violation(df_decoded_cfs, df_factuals, \
-#         dataset.continuous, dataset.categorical, dataset.immutables)
-#     for x in total_violations:
-#         violations.append(x[0])
-#     results['violation'] = violations
+    total_violations = constraint_violation(df_decoded_cfs, df_factuals, \
+        dataset.continuous, dataset.categorical, dataset.immutables)
+    for x in total_violations:
+        violations.append(x[0])
+    results['violation'] = violations
     
-#     # success
-#     results['success'] = success_rate(counterfactuals_without_nans, ml_model, cutoff=0.5)
+    # success
+    results['success'] = success_rate(counterfactuals_without_nans, ml_model, cutoff=0.5)
 
-#     # time
-#     results['time (seconds)'] = df_cfs['time (seconds)'].mean() 
+    # time
+    results['time (seconds)'] = df_cfs['time (seconds)'].mean() 
 
-#     carla_results = pd.concat([carla_results, results], axis=0)
+    carla_results = pd.concat([carla_results, results], axis=0)
 
-if data_name == 'adult':
-    carla_results = pd.read_csv("Final_results_Aug/adult_results_mcce_and_carla_K_10000_n_100.csv", index_col=0)
-elif data_name == 'give_me_some_credit':
-    carla_results = pd.read_csv("Final_results_Aug/give_me_some_credit_results_mcce_and_carla_K_10000_n_100.csv")
+# OLD RESULTS THAT ARE CURRENTLY IN THE PAPER
+# if data_name == 'adult':
+#     carla_results = pd.read_csv("Final_results_Aug/adult_results_mcce_and_carla_K_10000_n_100.csv", index_col=0)
+# elif data_name == 'give_me_some_credit':
+#     carla_results = pd.read_csv("Final_results_Aug/give_me_some_credit_results_mcce_and_carla_K_10000_n_100.csv")
 
-carla_results.rename(columns={'violations': 'violation', 'validity': 'success'}, inplace=True)
+# carla_results.rename(columns={'violations': 'violation', 'validity': 'success'}, inplace=True)
 
 print("Loading MCCE results")
 
-results = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_k_{k}_n_{n_test}.csv"), index_col=0)
+results = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_k_{k}_n_{n_test}_inverse_transform.csv"), index_col=0)
 results.sort_index(inplace=True)
-results['data'] = data_name
-results['method'] = 'mcce'
-results = dataset.inverse_transform(results)
+# results['data'] = data_name
+# results['method'] = 'mcce'
+# results = dataset.inverse_transform(results)
 
 ## Concat
 

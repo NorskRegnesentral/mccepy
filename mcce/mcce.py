@@ -4,9 +4,8 @@ import pandas as pd
 
 from .cart import CARTMethod
 from .sample import SampleMethod
-from sklearn.neighbors import NearestNeighbors
 
-from .metrics import distance, feasibility, constraint_violation, success_rate
+from .metrics import distance, constraint_violation, success_rate
 
 METHODS_MAP = {'cart': CARTMethod, 'sample': SampleMethod}
 
@@ -127,7 +126,7 @@ class MCCE:
         synth_df = synth_df[test.columns]
         return synth_df
 
-    def postprocess(self, data, synth, test, response, inverse_transform=None, cutoff=0.5):
+    def postprocess(self, synth, test, response, inverse_transform=None, cutoff=0.5):
         
         self.cutoff = cutoff
 
@@ -149,7 +148,7 @@ class MCCE:
 
         self.test_repeated = test_repeated
 
-        self.results = self.calculate_metrics(synth=synth_positive, test=self.test_repeated, data=data, \
+        self.results = self.calculate_metrics(synth=synth_positive, test=self.test_repeated, \
             response=response, inverse_transform=inverse_transform) 
 
         ## Find the best row for each test obs
@@ -162,11 +161,11 @@ class MCCE:
                 sparse = min(idx_df.L0) # 1) find least # features changed
                 sparse_df = idx_df[idx_df.L0 == sparse] 
                 closest = min(sparse_df.L2) # find smallest Gower distance
-                close_df = sparse_df[sparse_df.L2 == closest]
-
-                if(close_df.shape[0]>1):
-                    highest_feasibility = max(close_df.feasibility) #  3) find most feasible
-                    close_df = close_df[close_df.feasibility == highest_feasibility].head(1)
+                close_df = sparse_df[sparse_df.L2 == closest].head(1)
+                
+                # if(close_df.shape[0]>1):
+                #     highest_feasibility = max(close_df.feasibility) #  3) find most feasible
+                #     close_df = close_df[close_df.feasibility == highest_feasibility].head(1)
 
             else: # if you have only one row - return that row
                 close_df = idx_df.to_frame().T
@@ -175,7 +174,7 @@ class MCCE:
 
         self.results_sparse = results_sparse
 
-    def calculate_metrics(self, synth, test, data, response, inverse_transform):
+    def calculate_metrics(self, synth, test, response, inverse_transform):
 
         features = synth.columns.to_list()
         features.remove(response)
@@ -193,8 +192,8 @@ class MCCE:
         synth_metrics = synth.copy()
         
         # 1) Distance: Sparsity and Euclidean distance
-        factual = test[features]#.sort_index().to_numpy()
-        counterfactuals = synth[features]#.sort_index().to_numpy()
+        factual = test[features]
+        counterfactuals = synth[features]
         
         time1 = time.time()
         distances = pd.DataFrame(distance(counterfactuals, factual, self.model), index=factual.index)
@@ -203,15 +202,15 @@ class MCCE:
         self.distance_cpu_time = time2 - time1
         synth_metrics = pd.concat([synth_metrics, distances], axis=1)
 
-        # 2) Feasibility 
-        cols = data.columns.to_list()
-        cols.remove(response)
+        # # 2) Feasibility 
+        # cols = data.columns.to_list()
+        # cols.remove(response)
 
-        time1 = time.time()
-        synth_metrics['feasibility'] = feasibility(counterfactuals, data, cols)
+        # time1 = time.time()
+        # synth_metrics['feasibility'] = feasibility(counterfactuals, data, cols)
         
-        time2 = time.time()
-        self.feasibility_cpu_time = time2 - time1
+        # time2 = time.time()
+        # self.feasibility_cpu_time = time2 - time1
 
         # 3) Success
         synth_metrics['success'] = 1

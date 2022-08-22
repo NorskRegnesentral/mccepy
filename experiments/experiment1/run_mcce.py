@@ -7,6 +7,7 @@ from carla.data.catalog import OnlineCatalog
 from carla.models.catalog import MLModelCatalog
 from carla.models.negative_instances import predict_negative_instances
 
+from mcce.metrics import feasibility
 from mcce.mcce import MCCE
 
 PATH = 'Final_results_new'
@@ -121,25 +122,28 @@ for data_name in args.dataset:
     synth_df = mcce.generate(test_factual.drop(dataset.target, axis=1), k=K)
     time_generate = time.time()
 
-    mcce.postprocess(data=df, synth=synth_df, test=test_factual, response=y_col, \
+    mcce.postprocess(synth=synth_df, test=test_factual, response=y_col, \
         inverse_transform=dataset.inverse_transform, cutoff=0.5)
     time_postprocess = time.time()
 
     end = time.time() - start
 
+    # Feasibility 
+    cols = dataset.df.columns.to_list()
+    cols.remove(dataset.target)
+    mcce.results_sparse['feasibility'] = feasibility(mcce.results_sparse, dataset.df, cols)
+
+    # Timing
     mcce.results_sparse['time (seconds)'] = end
     mcce.results_sparse['fit (seconds)'] = time_fit - start
     mcce.results_sparse['generate (seconds)'] = time_generate - time_fit
     mcce.results_sparse['postprocess (seconds)'] = time_postprocess - time_generate
     
     mcce.results_sparse['distance (seconds)'] = mcce.distance_cpu_time
-    mcce.results_sparse['feasibility (seconds)'] = mcce.feasibility_cpu_time
     mcce.results_sparse['violation (seconds)'] = mcce.violation_cpu_time
-    
-    
-
+ 
     # (5) Save results 
-    mcce.results_sparse.to_csv(os.path.join(PATH, f"{data_name}_mcce_results_k_{K}_n_{n_test}.csv"))
+    # mcce.results_sparse.to_csv(os.path.join(PATH, f"{data_name}_mcce_results_k_{K}_n_{n_test}.csv"))
     
     # (6) Print the counterfactuals inverted to their original feature values/ranges
     results = mcce.results_sparse.copy()
@@ -147,15 +151,7 @@ for data_name in args.dataset:
     results['method'] = 'mcce'
     results['prediction'] = ml_model.predict_proba(results)[:, [1]]
     
-    # preds = ml_model.predict_proba(results)
-    # new_preds = []
-    # for x in preds:
-    #     new_preds.append(x[1])
-    # results['prediction'] = new_preds
     results = dataset.inverse_transform(results)
-
-    # results['validity'] = np.where(np.asarray(new_preds) >= 0.5, 1, 0)
-    print(os.path.join(PATH, f"{data_name}_mcce_results_k_{K}_n_{n_test}_inverse_transform.csv"))
     results.to_csv(os.path.join(PATH, f"{data_name}_mcce_results_k_{K}_n_{n_test}_inverse_transform.csv"))
 
 

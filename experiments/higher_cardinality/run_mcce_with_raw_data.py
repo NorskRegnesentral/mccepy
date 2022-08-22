@@ -189,16 +189,12 @@ cols.drop(response)
 # 1) Distance: Sparsity and Euclidean distance
 time1 = time.time()
 
-# factual = test_inverse_transform[features_inverse_transform].sort_index().to_numpy()
-# counterfactuals = synth_inverse_transform[features_inverse_transform].sort_index().to_numpy()
-
 # We don't transform the continuous features or the Euclidean distance will be wrong 
 cfs_continuous = synth[dataset.continuous].sort_index().to_numpy()
 cfs_categorical = synth_inverse_transform[dataset.categorical].sort_index().to_numpy()
 
 factual_continuous = test[dataset.continuous].sort_index().to_numpy()
 factual_categorical = test_inverse_transform[dataset.categorical].sort_index().to_numpy()
-
 
 delta_cont = factual_continuous - cfs_continuous
 delta_cat = factual_categorical - cfs_categorical
@@ -217,21 +213,21 @@ synth_metrics['L2'] = d3
 time2 = time.time()
 distance_cpu_time = time2 - time1
 
-# 2) Feasibility 
-time1 = time.time()
-feas_results = []
+# # 2) Feasibility 
+# time1 = time.time()
+# feas_results = []
 
-nbrs = NearestNeighbors(n_neighbors=5).fit(data[cols].values)
+# nbrs = NearestNeighbors(n_neighbors=5).fit(data[cols].values)
 
-for i, row in synth[cols].iterrows():
-    knn = nbrs.kneighbors(row.values.reshape((1, -1)), 5, return_distance=True)[0]
+# for i, row in synth[cols].iterrows():
+#     knn = nbrs.kneighbors(row.values.reshape((1, -1)), 5, return_distance=True)[0]
     
-    feas_results.append(np.mean(knn))
+#     feas_results.append(np.mean(knn))
 
-synth_metrics['feasibility'] = feas_results
+# synth_metrics['feasibility'] = feas_results
 
-time2 = time.time()
-feasibility_cpu_time = time2 - time1
+# time2 = time.time()
+# feasibility_cpu_time = time2 - time1
 
 # 3) Success
 synth_metrics['success'] = 1
@@ -294,11 +290,11 @@ for idx in list(set(results.index)):
         sparse = min(idx_df.L0) # 1) find least # features changed
         sparse_df = idx_df[idx_df.L0 == sparse] 
         closest = min(sparse_df.L2) # find smallest Gower distance
-        close_df = sparse_df[sparse_df.L2 == closest]
+        close_df = sparse_df[sparse_df.L2 == closest].head(1)
 
-        if(close_df.shape[0]>1):
-            highest_feasibility = max(close_df.feasibility) #  3) find most feasible
-            close_df = close_df[close_df.feasibility == highest_feasibility].head(1)
+        # if(close_df.shape[0]>1):
+        #     highest_feasibility = max(close_df.feasibility) #  3) find most feasible
+        #     close_df = close_df[close_df.feasibility == highest_feasibility].head(1)
 
     else: # if you have only one row - return that row
         close_df = idx_df.to_frame().T
@@ -308,17 +304,32 @@ for idx in list(set(results.index)):
 time_postprocess = time.time()
 end = time.time() - start
 
+# Feasibility
+cols = data.columns
+cols.drop(response)
+
+feas_results = []
+
+nbrs = NearestNeighbors(n_neighbors=5).fit(data[cols].values)
+
+for i, row in results_sparse[cols].iterrows():
+    knn = nbrs.kneighbors(row.values.reshape((1, -1)), 5, return_distance=True)[0]
+    
+    feas_results.append(np.mean(knn))
+
+results_sparse['feasibility'] = feas_results
+
+
 # print(f"timing: {timing}")
 results_sparse['time (seconds)'] = end
 
-mcce.results_sparse['time (seconds)'] = end
-mcce.results_sparse['fit (seconds)'] = time_fit - start
-mcce.results_sparse['generate (seconds)'] = time_generate - time_fit
-mcce.results_sparse['postprocess (seconds)'] = time_postprocess - time_generate
+results_sparse['time (seconds)'] = end
+results_sparse['fit (seconds)'] = time_fit - start
+results_sparse['generate (seconds)'] = time_generate - time_fit
+results_sparse['postprocess (seconds)'] = time_postprocess - time_generate
 
-mcce.results_sparse['distance (seconds)'] = mcce.distance_cpu_time
-mcce.results_sparse['feasibility (seconds)'] = mcce.feasibility_cpu_time
-mcce.results_sparse['violation (seconds)'] = mcce.violation_cpu_time
+results_sparse['distance (seconds)'] = distance_cpu_time
+results_sparse['violation (seconds)'] = violation_cpu_time
 
 
 # ----------------------------------------------------------------

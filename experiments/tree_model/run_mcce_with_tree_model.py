@@ -9,6 +9,7 @@ from carla.data.catalog import OnlineCatalog
 from carla.models.negative_instances import predict_negative_instances
 from carla import MLModel
 
+from mcce.metrics import feasibility
 from mcce.mcce import MCCE
 
 PATH = "Final_results_new/"
@@ -154,11 +155,17 @@ time_fit = time.time()
 synth_df = mcce.generate(test_factual.drop(dataset.target, axis=1), k=K)
 time_generate = time.time()
 
-mcce.postprocess(data=df, synth=synth_df, test=test_factual, response=y_col, \
+mcce.postprocess(synth=synth_df, test=test_factual, response=y_col, \
     inverse_transform=dataset.inverse_transform, cutoff=0.5)
 
 time_postprocess = time.time()
 end = time.time() - start
+
+# Feasibility 
+cols = dataset.df.columns.to_list()
+cols.remove(dataset.target)
+mcce.results_sparse['feasibility'] = feasibility(mcce.results_sparse, dataset.df, cols)
+
 
 mcce.results_sparse['time (seconds)'] = end
 mcce.results_sparse['fit (seconds)'] = time_fit - start
@@ -166,32 +173,38 @@ mcce.results_sparse['generate (seconds)'] = time_generate - time_fit
 mcce.results_sparse['postprocess (seconds)'] = time_postprocess - time_generate
 
 mcce.results_sparse['distance (seconds)'] = mcce.distance_cpu_time
-mcce.results_sparse['feasibility (seconds)'] = mcce.feasibility_cpu_time
 mcce.results_sparse['violation (seconds)'] = mcce.violation_cpu_time
 
 # Save results 
-mcce.results_sparse.to_csv(os.path.join(PATH, f"{data_name}_tree_model_results_k_{K}_n_{n_test}.csv"))
+# mcce.results_sparse.to_csv(os.path.join(PATH, f"{data_name}_mcce_results_tree_model_results_k_{K}_n_{n_test}.csv"))
+
+# (6) Print the counterfactuals inverted to their original feature values/ranges
+results = mcce.results_sparse.copy()
+results['data'] = data_name
+results['method'] = 'mcce'
+results['prediction'] = ml_model.predict_proba(results)[:, [1]]
+
+results = dataset.inverse_transform(results)
+results.to_csv(os.path.join(PATH, f"{data_name}_mcce_results_tree_model_k_{K}_n_{n_test}_inverse_transform.csv"))
 
 # Get the original factual feature values
 
-orig_preds = ml_model.predict_proba(test_factual)
-new_preds = []
-for x in orig_preds:
-    new_preds.append(x[1])
-
-test_inverse = dataset.inverse_transform(test_factual)
-test_inverse['pred'] = new_preds
+# orig_preds = ml_model.predict_proba(test_factual)
+# new_preds = []
+# for x in orig_preds:
+#     new_preds.append(x[1])
+# test_inverse = dataset.inverse_transform(test_factual)
+# test_inverse['pred'] = new_preds
 
 # Save original factual values
+# test_inverse.to_csv(os.path.join(PATH, f"{data_name}_tree_model_n_{n_test}_inverse_transform.csv"))
 
-test_inverse.to_csv(os.path.join(PATH, f"{data_name}_tree_model_n_{n_test}_inverse_transform.csv"))
+# orig_preds = ml_model.predict_proba(mcce.results_sparse)
+# new_preds = []
+# for x in orig_preds:
+#     new_preds.append(x[1])
 
-orig_preds = ml_model.predict_proba(mcce.results_sparse)
-new_preds = []
-for x in orig_preds:
-    new_preds.append(x[1])
+# mcce_inverse = dataset.inverse_transform(mcce.results_sparse)
+# mcce_inverse['pred'] = new_preds
 
-mcce_inverse = dataset.inverse_transform(mcce.results_sparse)
-mcce_inverse['pred'] = new_preds
-
-mcce_inverse.to_csv(os.path.join(PATH, f"{data_name}_mcce_results_tree_model_k_{K}_n_{n_test}_inverse_transform.csv"))
+# mcce_inverse.to_csv(os.path.join(PATH, f"{data_name}_k_{K}_n_{n_test}_inverse_transform.csv"))

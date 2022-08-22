@@ -1,10 +1,6 @@
 import warnings
 warnings.filterwarnings('ignore')
 
-from carla.data.catalog import OnlineCatalog
-from carla.models.catalog import MLModelCatalog
-from carla.models.negative_instances import predict_negative_instances
-
 import os
 import argparse
 import torch
@@ -13,20 +9,25 @@ import random
 import pandas as pd
 import numpy as np
 
+from carla.data.catalog import OnlineCatalog
+from carla.models.catalog import MLModelCatalog
+from carla.models.negative_instances import predict_negative_instances
+
+from mcce.metrics import feasibility
 from mcce.mcce import MCCE
 
 ## FOR EACH DATA SET you have to adjust n below - 
 ## for adult and gmc, I use 100, 1000, 10000 and the size of the data set
 ## for compas, I use 100, 1000, 5000, and the size of the data aset 
 
-PATH = "../../Results_Test/"
+PATH = "Final_results_new"
 
 parser = argparse.ArgumentParser(description="Fit various recourse methods from CARLA.")
 parser.add_argument(
     "-d",
     "--dataset",
     nargs="*",
-    default=["adult", "give_me_some_credit", "compas"],
+    default="adult",
     choices=["adult", "give_me_some_credit", "compas"],
     help="Datasets for experiment",
 )
@@ -38,16 +39,17 @@ parser.add_argument(
     help="Number of instances per dataset",
 )
 parser.add_argument(
-    "-K",
+    "-k",
+    "--k",
     type=int,
-    default=100,
+    default=10000,
     help="Number of instances to sample for MCCE.",
 )
 
 args = parser.parse_args()
 
-K = args.K
-n_test = args.n
+K = args.k
+n_test = args.number_of_samples
 seed = 1
 data_name = args.dataset
 
@@ -129,13 +131,11 @@ for n in n_list:
 
     if n == dataset.df.shape[0]:
         
-        print(n)
         random.seed(0)
         rows = random.sample(df.index.to_list(), n)
         rows = np.sort(rows)
         df_subset = df.loc[rows]
-        print(df.equals(df_subset))
-
+        
         start = time.time()
 
         mcce = MCCE(fixed_features=fixed_features,\
@@ -146,10 +146,15 @@ for n in n_list:
         mcce.fit(df.drop(dataset.target, axis=1), dtypes)
 
         synth_df = mcce.generate(test_factual.drop(dataset.target, axis=1), k=100)
-        mcce.postprocess(data=df, synth=synth_df, test=test_factual, response=y_col, \
+        mcce.postprocess(synth=synth_df, test=test_factual, response=y_col, \
             inverse_transform=dataset.inverse_transform, cutoff=0.5)
 
         timing = time.time() - start
+
+        # Feasibility 
+        cols = dataset.df.columns.to_list()
+        cols.remove(dataset.target)
+        mcce.results_sparse['feasibility'] = feasibility(mcce.results_sparse, dataset.df, cols)
 
         mcce.results_sparse['time (seconds)'] = timing
 
@@ -171,10 +176,15 @@ for n in n_list:
             mcce.fit(df.drop(dataset.target, axis=1), dtypes)
 
             synth_df = mcce.generate(test_factual.drop(dataset.target, axis=1), k=100)
-            mcce.postprocess(data=df, synth=synth_df, test=test_factual, response=y_col, \
+            mcce.postprocess(synth=synth_df, test=test_factual, response=y_col, \
                 inverse_transform=dataset.inverse_transform, cutoff=0.5)
 
             timing = time.time() - start
+            
+            # Feasibility 
+            cols = dataset.df.columns.to_list()
+            cols.remove(dataset.target)
+            mcce.results_sparse['feasibility'] = feasibility(mcce.results_sparse, dataset.df, cols)
 
             mcce.results_sparse['time (seconds)'] = timing
 

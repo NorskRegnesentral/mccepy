@@ -1,10 +1,6 @@
 import warnings
 warnings.filterwarnings('ignore')
 
-from carla.data.catalog import OnlineCatalog
-from carla.models.catalog import MLModelCatalog
-from carla.models.negative_instances import predict_negative_instances, predict_label
-
 import os
 import argparse
 import torch
@@ -12,10 +8,15 @@ import time
 import random
 import numpy as np
 import pandas as pd
-            
+
+from carla.data.catalog import OnlineCatalog
+from carla.models.catalog import MLModelCatalog
+from carla.models.negative_instances import predict_negative_instances, predict_label
+
+from mcce.metrics import feasibility
 from mcce.mcce import MCCE
 
-PATH = "../../Results_test/"
+PATH = "Final_results_new"
 
 ## FOR EACH DATA SET you have to adjust n below - 
 ## for adult and gmc, I use 100, 1000, 10000 and the size of the data set
@@ -26,7 +27,7 @@ parser.add_argument(
     "-d",
     "--dataset",
     nargs="*",
-    default=["adult", "give_me_some_credit", "compas"],
+    default="adult",
     choices=["adult", "give_me_some_credit", "compas"],
     help="Datasets for experiment",
 )
@@ -38,16 +39,17 @@ parser.add_argument(
     help="Number of instances per dataset",
 )
 parser.add_argument(
-    "-K",
+    "-k",
+    "--k",
     type=int,
-    default=100,
+    default=10000,
     help="Number of instances to sample for MCCE.",
 )
 
 args = parser.parse_args()
 
-K = args.K
-n_test = args.n
+K = args.k
+n_test = args.number_of_samples
 seed = 1
 data_name = args.dataset
 
@@ -128,7 +130,6 @@ elif data_name == 'compas':
 
 results = []
 for n in n_list:
-    print(n)
 
     if n == len(possible_train_indices): # if the whole data set
 
@@ -159,10 +160,15 @@ for n in n_list:
 
         mcce.fit(df.drop(dataset.target, axis=1), dtypes)
 
-        mcce.postprocess(data=df, synth=synth, test=test_factual, response=y_col, \
+        mcce.postprocess(synth=synth, test=test_factual, response=y_col, \
             inverse_transform=dataset.inverse_transform, cutoff=0.5)
 
         timing = time.time() - start
+
+        # Feasibility 
+        cols = dataset.df.columns.to_list()
+        cols.remove(dataset.target)
+        mcce.results_sparse['feasibility'] = feasibility(mcce.results_sparse, dataset.df, cols)
 
         mcce.results_sparse['time (seconds)'] = timing
 
@@ -198,10 +204,15 @@ for n in n_list:
 
             mcce.fit(df.drop(dataset.target, axis=1), dtypes)
 
-            mcce.postprocess(data=df, synth=synth, test=test_factual, response=y_col, \
+            mcce.postprocess(synth=synth, test=test_factual, response=y_col, \
                 inverse_transform=dataset.inverse_transform, cutoff=0.5)
 
             timing = time.time() - start
+
+            # Feasibility 
+            cols = dataset.df.columns.to_list()
+            cols.remove(dataset.target)
+            mcce.results_sparse['feasibility'] = feasibility(mcce.results_sparse, dataset.df, cols)
 
             mcce.results_sparse['time (seconds)'] = timing
 
@@ -209,4 +220,4 @@ for n in n_list:
 
 results2 = pd.DataFrame(results, columns=['L0', 'L2', 'feasibility', 'violation', 'NCE', 'timing', 'Ntest', 'seed'])
 
-results2.to_csv(os.path.join(PATH, f"{data_name}_mcce_light_n_{n_test}.csv"))
+results2.to_csv(os.path.join(PATH, f"{data_name}_mcce_results_light_n_{n_test}.csv"))

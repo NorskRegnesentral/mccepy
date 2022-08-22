@@ -39,7 +39,7 @@ parser.add_argument(
     "-k",
     "--k",
     type=int,
-    default=100,
+    default=10000,
     help="Number generated counterfactuals per test observation",
 )
 
@@ -133,7 +133,6 @@ for method in ['cchvae', 'cem-vae', 'revise', 'clue', 'crud', 'face']:
 if data_name == 'adult':
     to_write = results.loc[31]
 
-    
     feature = 'marital-status'
     dct = {'Married': 'M', 'Non-Married': 'NM'}
     to_write[feature] = [dct[item] for item in to_write[feature]]

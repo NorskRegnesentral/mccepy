@@ -198,7 +198,7 @@ class MCCE:
         
         time1 = time.time()
         distances = pd.DataFrame(distance(counterfactuals, factual, self.model), index=factual.index)
-
+        
         time2 = time.time()
         self.distance_cpu_time = time2 - time1
         synth_metrics = pd.concat([synth_metrics, distances], axis=1)

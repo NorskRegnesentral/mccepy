@@ -13,7 +13,7 @@ import pandas as pd
 
 from mcce.mcce import MCCE
 
-PATH = "../../Results_test/experiment2/"
+PATH = "Final_results_new"
 
 parser = argparse.ArgumentParser(description="Fit MCCE with various datasets.")
 parser.add_argument(
@@ -40,8 +40,8 @@ seed = 1
 
 # Load raw data
 
-train_path = "../../Data/adult.data"
-test_path = "../../Data/adult.test"
+train_path = "Data/adult.data"
+test_path = "Data/adult.test"
 train = pd.read_csv(train_path, sep=", ", header=None, names=['age', 'workclass', 'fnlwgt', 'education', 'education-num', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'capital-gain', 'capital-loss', 'hours-per-week', 'native-country', 'income'])
 test = pd.read_csv(test_path, skiprows=1, sep=", ", header=None, names=['age', 'workclass', 'fnlwgt', 'education', 'education-num', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'capital-gain', 'capital-loss', 'hours-per-week', 'native-country', 'income'])
 
@@ -66,7 +66,7 @@ for feature in ["workclass", "marital-status", "occupation", "relationship", \
     mapping = d.to_dict()
     df[feature] = [mapping[item] for item in df[feature]]
 
-df.to_csv("../../Data/train_not_normalized_data_from_carla.csv", index=False)
+df.to_csv("Data/train_not_normalized_data_from_carla.csv", index=False)
 
 ## Read in data using CARLA package
 
@@ -74,7 +74,7 @@ continuous = ["age", "fnlwgt", "education-num", "capital-gain", "hours-per-week"
 categorical = ["marital-status", "native-country", "occupation", "race", "relationship", "sex", "workclass"]
 immutable = ["age", "sex"]
 
-dataset = CsvCatalog(file_path="../../Data/train_not_normalized_data_from_carla.csv",
+dataset = CsvCatalog(file_path="Data/train_not_normalized_data_from_carla.csv",
                      continuous=continuous,
                      categorical=categorical,
                      immutables=immutable,
@@ -91,8 +91,6 @@ ml_model = MLModelCatalog(
         load_online=False, 
         backend="pytorch"
     )
-
-
 ml_model.train(
 learning_rate=0.002,
 epochs=20,
@@ -126,16 +124,19 @@ for x in cat_feat_encoded:
 df = (dataset.df).astype(dtypes)
 
 
+import time
 start = time.time()
+
 mcce = MCCE(fixed_features=fixed_features,\
     fixed_features_encoded=fixed_features_encoded,
         continuous=dataset.continuous, categorical=dataset.categorical,\
             model=ml_model, seed=1)
 
 mcce.fit(df.drop(dataset.target, axis=1), dtypes)
+time_fit = time.time()
 
-synth_df = mcce.generate(test_factual.drop(dataset.target, axis=1), k=100)
-
+synth_df = mcce.generate(test_factual.drop(dataset.target, axis=1), k=K)
+time_generate = time.time()
 
 # ----------------------------------------------------------------
 ## TODO: Implement this in MCCE package
@@ -186,6 +187,7 @@ cols = data.columns
 cols.drop(response)
 
 # 1) Distance: Sparsity and Euclidean distance
+time1 = time.time()
 
 # factual = test_inverse_transform[features_inverse_transform].sort_index().to_numpy()
 # counterfactuals = synth_inverse_transform[features_inverse_transform].sort_index().to_numpy()
@@ -212,9 +214,13 @@ synth_metrics['L0'] = d1
 synth_metrics['L1'] = d2
 synth_metrics['L2'] = d3
 
-# 2) Feasibility 
+time2 = time.time()
+distance_cpu_time = time2 - time1
 
+# 2) Feasibility 
+time1 = time.time()
 feas_results = []
+
 nbrs = NearestNeighbors(n_neighbors=5).fit(data[cols].values)
 
 for i, row in synth[cols].iterrows():
@@ -224,11 +230,14 @@ for i, row in synth[cols].iterrows():
 
 synth_metrics['feasibility'] = feas_results
 
+time2 = time.time()
+feasibility_cpu_time = time2 - time1
+
 # 3) Success
 synth_metrics['success'] = 1
 
 # 4) Violation
-
+time1 = time.time()
 def intersection(lst1, lst2):
     return list(set(lst1) & set(lst2))
 
@@ -272,6 +281,9 @@ categorical_violations = np.sum(categorical_violations.values, axis=1).reshape(
 )
 
 synth_metrics['violation'] = continuous_violations + categorical_violations
+time2 = time.time()
+violation_cpu_time = time2 - time1
+
 
 results = synth_metrics.copy()
 results_sparse = pd.DataFrame(columns=results.columns)
@@ -293,9 +305,21 @@ for idx in list(set(results.index)):
         
     results_sparse = pd.concat([results_sparse, close_df], axis=0)
 
-timing = time.time() - start
-print(f"timing: {timing}")
-results_sparse['time (seconds)'] = timing
+time_postprocess = time.time()
+end = time.time() - start
+
+# print(f"timing: {timing}")
+results_sparse['time (seconds)'] = end
+
+mcce.results_sparse['time (seconds)'] = end
+mcce.results_sparse['fit (seconds)'] = time_fit - start
+mcce.results_sparse['generate (seconds)'] = time_generate - time_fit
+mcce.results_sparse['postprocess (seconds)'] = time_postprocess - time_generate
+
+mcce.results_sparse['distance (seconds)'] = mcce.distance_cpu_time
+mcce.results_sparse['feasibility (seconds)'] = mcce.feasibility_cpu_time
+mcce.results_sparse['violation (seconds)'] = mcce.violation_cpu_time
+
 
 # ----------------------------------------------------------------
 

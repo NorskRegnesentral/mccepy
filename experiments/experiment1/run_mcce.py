@@ -9,7 +9,7 @@ from carla.models.negative_instances import predict_negative_instances
 
 from mcce.mcce import MCCE
 
-PATH = 'Results_Test2/experiment1/'
+PATH = 'Final_results_new'
 
 parser = argparse.ArgumentParser(description="Fit MCCE with various datasets.")
 parser.add_argument(
@@ -24,14 +24,14 @@ parser.add_argument(
     "-n",
     "--number_of_samples",
     type=int,
-    default=10,
+    default=100,
     help="Number of instances per dataset",
 )
 parser.add_argument(
     "-k",
     "--k",
     type=int,
-    default=100,
+    default=10000,
     help="Number generated counterfactuals per test observation",
 )
 
@@ -49,7 +49,6 @@ for data_name in args.dataset:
     dataset = OnlineCatalog(data_name)
     
     # (1) Load predictive model and predict probabilities
-
     torch.manual_seed(0)
     ml_model = MLModelCatalog(
             dataset, 
@@ -57,15 +56,13 @@ for data_name in args.dataset:
             load_online=False, 
             backend="pytorch"
         )
-
-
     if data_name == 'adult':
         ml_model.train(
         learning_rate=0.002,
         epochs=20,
         batch_size=1024,
         hidden_size=[18, 9, 3],
-        force_train=True, # don't forget to add this or it might load an older model from disk
+        force_train=False, # don't forget to add this or it might load an older model from disk
         )
     elif data_name == 'give_me_some_credit':
         ml_model.train(
@@ -73,7 +70,7 @@ for data_name in args.dataset:
         epochs=20,
         batch_size=2048,
         hidden_size=[18, 9, 3],
-        force_train=True, # don't forget to add this or it might load an older model from disk
+        force_train=False, # don't forget to add this or it might load an older model from disk
         )
     elif data_name == 'compas':
         ml_model.train(
@@ -81,11 +78,10 @@ for data_name in args.dataset:
         epochs=25,
         batch_size=25,
         hidden_size=[18, 9, 3],
-        force_train=True, # don't forget to add this or it might load an older model from disk
+        force_train=False, # don't forget to add this or it might load an older model from disk
         )
 
     # (2) Find unhappy customers and choose which ones to make counterfactuals for
-    
     factuals = predict_negative_instances(ml_model, dataset.df)
     test_factual = factuals.iloc[:n_test]
     
@@ -95,7 +91,7 @@ for data_name in args.dataset:
     cat_feat = dataset.categorical
     cat_feat_encoded = dataset.encoder.get_feature_names(dataset.categorical)
 
-    if data_name == 'adult': 
+    if data_name == 'adult':
         fixed_features = ['age', 'sex']
         fixed_features_encoded = ['age', 'sex_Male']
     elif data_name == 'give_me_some_credit':
@@ -120,14 +116,27 @@ for data_name in args.dataset:
                 model=ml_model, seed=1)
 
     mcce.fit(df.drop(dataset.target, axis=1), dtypes)
+    time_fit = time.time()
 
-    synth_df = mcce.generate(test_factual.drop(dataset.target, axis=1), k=100)
+    synth_df = mcce.generate(test_factual.drop(dataset.target, axis=1), k=K)
+    time_generate = time.time()
+
     mcce.postprocess(data=df, synth=synth_df, test=test_factual, response=y_col, \
         inverse_transform=dataset.inverse_transform, cutoff=0.5)
+    time_postprocess = time.time()
 
-    timing = time.time() - start
+    end = time.time() - start
 
-    mcce.results_sparse['time (seconds)'] = timing
+    mcce.results_sparse['time (seconds)'] = end
+    mcce.results_sparse['fit (seconds)'] = time_fit - start
+    mcce.results_sparse['generate (seconds)'] = time_generate - time_fit
+    mcce.results_sparse['postprocess (seconds)'] = time_postprocess - time_generate
+    
+    mcce.results_sparse['distance (seconds)'] = mcce.distance_cpu_time
+    mcce.results_sparse['feasibility (seconds)'] = mcce.feasibility_cpu_time
+    mcce.results_sparse['violation (seconds)'] = mcce.violation_cpu_time
+    
+    
 
     # (5) Save results 
     mcce.results_sparse.to_csv(os.path.join(PATH, f"{data_name}_mcce_results_k_{K}_n_{n_test}.csv"))
@@ -146,7 +155,7 @@ for data_name in args.dataset:
     results = dataset.inverse_transform(results)
 
     # results['validity'] = np.where(np.asarray(new_preds) >= 0.5, 1, 0)
-
+    print(os.path.join(PATH, f"{data_name}_mcce_results_k_{K}_n_{n_test}_inverse_transform.csv"))
     results.to_csv(os.path.join(PATH, f"{data_name}_mcce_results_k_{K}_n_{n_test}_inverse_transform.csv"))
 
 

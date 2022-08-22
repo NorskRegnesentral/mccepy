@@ -49,8 +49,11 @@ k = args.k
 results_inverse = pd.read_csv(os.path.join(path, f"adult_mcce_results_tree_model_k_{k}_n_{n_test}_inverse_transform.csv"), index_col=0)
 
 print(f"L0: {results_inverse.L0.mean()}")
+print(f"L0 sd: {results_inverse.L0.std()}")
 print(f"L2: {results_inverse.L2.mean()}")
+print(f"L2 sd: {results_inverse.L2.std()}")
 print(f"Feasibility: {results_inverse.feasibility.mean()}")
+print(f"Feasibility sd: {results_inverse.feasibility.std()}")
 print(f"Violations: {results_inverse.violation.mean()}")
 print(f"Success: {results_inverse.success.mean()}")
 print(f"N_CE: {results_inverse.shape[0]}")

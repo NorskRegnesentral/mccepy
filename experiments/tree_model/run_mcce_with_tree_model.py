@@ -11,14 +11,15 @@ from carla import MLModel
 
 from mcce.mcce import MCCE
 
-PATH = "../../Results_test/experiment3/"
+PATH = "Final_results_new/"
+# must do pip install . in CARLA_version_2 directory
 
 parser = argparse.ArgumentParser(description="Fit MCCE with various datasets.")
 parser.add_argument(
     "-d",
     "--dataset",
     nargs="*",
-    default=["adult"],
+    default="adult",
     choices=["adult", "give_me_some_credit", "compas"],
     help="Datasets for experiment",
 )
@@ -26,14 +27,14 @@ parser.add_argument(
     "-n",
     "--number_of_samples",
     type=int,
-    default=10,
+    default=100,
     help="Number of instances per dataset",
 )
 parser.add_argument(
     "-k",
     "--k",
     type=int,
-    default=100,
+    default=10000,
     help="Number generated counterfactuals per test observation",
 )
 
@@ -148,14 +149,28 @@ mcce = MCCE(fixed_features=fixed_features,\
                 model=ml_model, seed=1)
 
 mcce.fit(df.drop(dataset.target, axis=1), dtypes)
+time_fit = time.time()
 
-synth_df = mcce.generate(test_factual.drop(dataset.target, axis=1), k=100)
+synth_df = mcce.generate(test_factual.drop(dataset.target, axis=1), k=K)
+time_generate = time.time()
+
 mcce.postprocess(data=df, synth=synth_df, test=test_factual, response=y_col, \
     inverse_transform=dataset.inverse_transform, cutoff=0.5)
 
-timing = time.time() - start
+time_postprocess = time.time()
+end = time.time() - start
 
-mcce.results_sparse['time (seconds)'] = timing
+mcce.results_sparse['time (seconds)'] = end
+mcce.results_sparse['fit (seconds)'] = time_fit - start
+mcce.results_sparse['generate (seconds)'] = time_generate - time_fit
+mcce.results_sparse['postprocess (seconds)'] = time_postprocess - time_generate
+
+mcce.results_sparse['distance (seconds)'] = mcce.distance_cpu_time
+mcce.results_sparse['feasibility (seconds)'] = mcce.feasibility_cpu_time
+mcce.results_sparse['violation (seconds)'] = mcce.violation_cpu_time
+
+# Save results 
+mcce.results_sparse.to_csv(os.path.join(PATH, f"{data_name}_tree_model_results_k_{K}_n_{n_test}.csv"))
 
 # Get the original factual feature values
 
@@ -178,7 +193,5 @@ for x in orig_preds:
 
 mcce_inverse = dataset.inverse_transform(mcce.results_sparse)
 mcce_inverse['pred'] = new_preds
-
-# Save results
 
 mcce_inverse.to_csv(os.path.join(PATH, f"{data_name}_mcce_results_tree_model_k_{K}_n_{n_test}_inverse_transform.csv"))

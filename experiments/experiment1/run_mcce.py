@@ -148,6 +148,8 @@ results.sort_index(inplace=True)
 
 results[cols].to_csv(os.path.join(PATH, f"{data_name}_mcce_results_k_{K}_n_{n_test}.csv"))
 
+print(dataset.inverse_transform(mcce.results_sparse).loc[31])
+
 
 
 

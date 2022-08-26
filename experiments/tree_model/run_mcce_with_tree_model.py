@@ -189,6 +189,7 @@ results['prediction'] = ml_model.predict_proba(results)[:, [1]]
 results = dataset.inverse_transform(results)
 results.to_csv(os.path.join(PATH, f"{data_name}_mcce_results_tree_model_k_{K}_n_{n_test}_inverse_transform.csv"))
 
+print(dataset.inverse_transform(mcce.results_sparse).loc[31])
 # Get the original factual feature values
 
 # orig_preds = ml_model.predict_proba(test_factual)

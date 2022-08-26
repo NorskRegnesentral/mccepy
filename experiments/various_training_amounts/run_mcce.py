@@ -39,8 +39,8 @@ parser.add_argument(
     help="Number of instances per dataset",
 )
 parser.add_argument(
-    "-k",
-    "--k",
+    "-K",
+    "--K",
     type=int,
     default=10000,
     help="Number of instances to sample for MCCE.",
@@ -48,7 +48,7 @@ parser.add_argument(
 
 args = parser.parse_args()
 
-K = args.k
+K = args.K
 n_test = args.number_of_samples
 seed = 1
 data_name = args.dataset

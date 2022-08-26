@@ -1,25 +1,24 @@
+import os
+import argparse
 import warnings
 warnings.filterwarnings('ignore')
-
-from carla.data.catalog import OnlineCatalog
-from carla.models.catalog import MLModelCatalog
-from carla.models.negative_instances import predict_negative_instances
 
 import torch
 torch.manual_seed(0)
 
 import pandas as pd
-pd.set_option('display.max_columns', None)
+pd.set_option('display.max_columns', 30)
+# pd.set_option('display.width', 80)
 
-import os
-from mcce.metrics import distance, constraint_violation, feasibility, success_rate
-
-import argparse
+from carla.data.catalog import OnlineCatalog
+from carla.models.catalog import MLModelCatalog
+from carla.models.negative_instances import predict_negative_instances
 
 parser = argparse.ArgumentParser(description="Fit MCCE with various datasets.")
 parser.add_argument(
     "-p",
     "--path",
+    required=True,
     help="Path where results are saved",
 )
 parser.add_argument(
@@ -36,11 +35,17 @@ parser.add_argument(
     help="Number of instances per dataset",
 )
 parser.add_argument(
-    "-k",
-    "--k",
+    "-K",
+    "--K",
     type=int,
     default=10000,
     help="Number generated counterfactuals per test observation",
+)
+parser.add_argument(
+    "-ft",
+    "--force_train",
+    action='store_true',  # default is False
+    help="Whether to train the prediction model from scratch or not. Default will not train.",
 )
 
 args = parser.parse_args()
@@ -48,7 +53,10 @@ args = parser.parse_args()
 path = args.path
 data_name = args.dataset
 n_test = args.number_of_samples
-k = args.k
+K = args.K
+force_train = args.force_train
+
+print(f"Load {data_name} data set")
 
 dataset = OnlineCatalog(data_name)
 
@@ -64,7 +72,7 @@ if data_name == 'adult':
     epochs=20,
     batch_size=1024,
     hidden_size=[18, 9, 3],
-    force_train=False,
+    force_train=force_train,
     )
 elif data_name == 'give_me_some_credit':
     ml_model.train(
@@ -72,7 +80,7 @@ elif data_name == 'give_me_some_credit':
     epochs=20,
     batch_size=2048,
     hidden_size=[18, 9, 3],
-    force_train=False,
+    force_train=force_train,
     )
 elif data_name == 'compas':
     ml_model.train(
@@ -80,7 +88,7 @@ elif data_name == 'compas':
     epochs=25,
     batch_size=25,
     hidden_size=[18, 9, 3],
-    force_train=False,
+    force_train=force_train,
     )
 
 if data_name == 'adult':
@@ -96,22 +104,22 @@ pred = [row[1] for row in pred]
 factuals = predict_negative_instances(ml_model, dataset.df)
 test_factual = factuals.iloc[:100]
 
-results = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_k_{k}_n_{n_test}.csv"),  index_col=0)
-results.sort_index(inplace=True)
+results = dataset.inverse_transform(test_factual[factuals.columns])
+results['method'] = 'original'
 results['data'] = data_name
-results['method'] = 'mcce'
 
-cfs_mcce = dataset.inverse_transform(results)
+for method in ['cchvae', 'cem-vae', 'revise', 'clue', 'crud', 'face', 'mcce']:
+    print(f"Finding examples for {method}")
 
-cfs_carla = pd.DataFrame()
-for method in ['cchvae', 'cem-vae', 'revise', 'clue', 'crud', 'face']:
-    cfs = pd.read_csv(os.path.join(path, f"{data_name}_manifold_results.csv"), index_col=0)
-    factuals = predict_negative_instances(ml_model, dataset.df)
-    test_factual = factuals.iloc[:100]
-
-    df_cfs = cfs[cfs['method'] == method].drop(['method',	'data'], axis=1)
+    if method == 'mcce':
+        cfs = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_k_{K}_n_{n_test}.csv"), index_col=0)
+    else:
+        cfs = pd.read_csv(os.path.join(path, f"{data_name}_manifold_results.csv"), index_col=0)
     
-    # missing values
+    df_cfs = cfs[cfs['method'] == method].drop(['method',	'data'], axis=1)
+    df_cfs.sort_index(inplace=True)
+
+    # remove missing values
     nan_idx = df_cfs.index[df_cfs.isnull().any(axis=1)]
     non_nan_idx = df_cfs.index[~(df_cfs.isnull()).any(axis=1)]
 
@@ -122,13 +130,12 @@ for method in ['cchvae', 'cem-vae', 'revise', 'clue', 'crud', 'face']:
     counterfactuals_without_nans = output_counterfactuals.drop(index=nan_idx)
 
     # counterfactuals
-    temp = dataset.inverse_transform(counterfactuals_without_nans)
-    temp['method'] = method
-    temp['data'] = data_name
+    if len(counterfactuals_without_nans) > 0:
+        temp = dataset.inverse_transform(counterfactuals_without_nans[factuals.columns])
+        temp['method'] = method
+        temp['data'] = data_name
 
-    cfs_carla = pd.concat([cfs_carla, temp], axis=0)
-
-    results = pd.concat([cfs_mcce, cfs_carla])
+        results = pd.concat([results, temp], axis=0)
 
 if data_name == 'adult':
     to_write = results.loc[31]
@@ -157,7 +164,6 @@ if data_name == 'adult':
     dct = {'Male': 'M'}
     to_write[feature] = [dct[item] for item in to_write[feature]]
 
-
     feature = 'workclass'
     dct = {'Self-emp-not-inc': 'SENI', 'Private': 'P', 'Non-Private': 'NP'}
     to_write[feature] = [dct[item] for item in to_write[feature]]
@@ -166,19 +172,19 @@ if data_name == 'adult':
     'hours-per-week', 'marital-status', 'native-country', \
     'occupation', 'race', 'relationship', 'sex', 'workclass']
 
-    print(to_write[cols]) # to_latex(index=False, float_format="%.0f", )
+    print(to_write[cols].round(0).to_string()) # to_latex(index=False, float_format="%.0f", )
 
 elif data_name == 'give_me_some_credit':
     
-    cols = ['method', 'age', 'RevolvingUtilizationOfUnsecuredLines', 'NumberOfTime30-59DaysPastDueNotWorse', 'DebtRatio', 'MonthlyIncome', 'NumberOfOpenCreditLinesAndLoans', 'NumberOfTimes90DaysLate', 'NumberRealEstateLoansOrLines', 'NumberOfTime60-89DaysPastDueNotWorse', 'NumberOfDependents']
+    cols = ['method', 'age', 'RevolvingUtilizationOfUnsecuredLines', 'NumberOfTime30-59DaysPastDueNotWorse', 'DebtRatio', 'MonthlyIncome', 'NumberOfOpenCreditLinesAndLoans', 
+            'NumberOfTimes90DaysLate', 'NumberRealEstateLoansOrLines', 'NumberOfTime60-89DaysPastDueNotWorse', 'NumberOfDependents']
 
     to_write = results[cols].loc[263]
 
     cols = ['Method', 'Age', 'Unsec. Lines', 'Nb Days Past 30', 'Debt Ratio', 'Month Inc.', 'Nb Credit Lines', 'Nb Times 90 Days Late', 'Nb Real Estate Loans', 'Nb Times 60 Days Past', 'Nb Dep.']
 
     to_write.columns = cols
-
-    print(to_write)
+    print(to_write[cols].round(0).to_string())
  
 
     

@@ -16,8 +16,8 @@ parser = argparse.ArgumentParser(description="Fit MCCE with various datasets.")
 parser.add_argument(
     "-d",
     "--dataset",
-    nargs="*",
-    default=["adult"],
+    type=str,
+    default="adult",
     choices=["adult", "give_me_some_credit", "compas"],
     help="Datasets for experiment",
 )
@@ -29,130 +29,124 @@ parser.add_argument(
     help="Number of instances per dataset",
 )
 parser.add_argument(
-    "-k",
-    "--k",
+    "-K",
+    "--K",
     type=int,
     default=10000,
     help="Number generated counterfactuals per test observation",
+)
+parser.add_argument(
+    "-ft",
+    "--force_train",
+    action='store_true',  # default is False
+    help="Whether to train the prediction model from scratch or not. Default will not train.",
 )
 
 args = parser.parse_args()
 
 n_test = args.number_of_samples
-K = args.k # 1000 for Compas
+K = args.K # 1000 for Compas
+data_name = args.dataset
+force_train = args.force_train
 seed = 1
 
-# Use CARLA to load dataset and predictive model
-print("Loading data from Carla...")
+print(f"Load {data_name} data set")
+dataset = OnlineCatalog(data_name)
 
-for data_name in args.dataset:
+print("Load predictive model")
+torch.manual_seed(0)
+ml_model = MLModelCatalog(
+        dataset, 
+        model_type="ann", 
+        load_online=False, 
+        backend="pytorch"
+    )
+if data_name == 'adult':
+    ml_model.train(
+    learning_rate=0.002,
+    epochs=20,
+    batch_size=1024,
+    hidden_size=[18, 9, 3],
+    force_train=force_train,
+    )
+elif data_name == 'give_me_some_credit':
+    ml_model.train(
+    learning_rate=0.002,
+    epochs=20,
+    batch_size=2048,
+    hidden_size=[18, 9, 3],
+    force_train=force_train,
+    )
+elif data_name == 'compas':
+    ml_model.train(
+    learning_rate=0.002,
+    epochs=25,
+    batch_size=25,
+    hidden_size=[18, 9, 3],
+    force_train=force_train,
+    )
 
-    dataset = OnlineCatalog(data_name)
-    
-    # (1) Load predictive model and predict probabilities
-    torch.manual_seed(0)
-    ml_model = MLModelCatalog(
-            dataset, 
-            model_type="ann", 
-            load_online=False, 
-            backend="pytorch"
-        )
-    if data_name == 'adult':
-        ml_model.train(
-        learning_rate=0.002,
-        epochs=20,
-        batch_size=1024,
-        hidden_size=[18, 9, 3],
-        force_train=False, # don't forget to add this or it might load an older model from disk
-        )
-    elif data_name == 'give_me_some_credit':
-        ml_model.train(
-        learning_rate=0.002,
-        epochs=20,
-        batch_size=2048,
-        hidden_size=[18, 9, 3],
-        force_train=False, # don't forget to add this or it might load an older model from disk
-        )
-    elif data_name == 'compas':
-        ml_model.train(
-        learning_rate=0.002,
-        epochs=25,
-        batch_size=25,
-        hidden_size=[18, 9, 3],
-        force_train=False, # don't forget to add this or it might load an older model from disk
-        )
+print("Find unhappy customers and choose which ones to make counterfactuals for")
+factuals = predict_negative_instances(ml_model, dataset.df)
+test_factual = factuals.iloc[:n_test]
 
-    # (2) Find unhappy customers and choose which ones to make counterfactuals for
-    factuals = predict_negative_instances(ml_model, dataset.df)
-    test_factual = factuals.iloc[:n_test]
-    
-    y_col = dataset.target
-    cont_feat = dataset.continuous
-    
-    cat_feat = dataset.categorical
-    cat_feat_encoded = dataset.encoder.get_feature_names(dataset.categorical)
+y_col = dataset.target
+cont_feat = dataset.continuous
 
-    if data_name == 'adult':
-        fixed_features = ['age', 'sex']
-        fixed_features_encoded = ['age', 'sex_Male']
-    elif data_name == 'give_me_some_credit':
-        fixed_features = ['age']
-        fixed_features_encoded = ['age']
-    elif data_name == 'compas':
-        fixed_features = ['age', 'sex', 'race']
-        fixed_features_encoded = ['age', 'sex_Male', 'race_Other']
+cat_feat = dataset.categorical
+cat_feat_encoded = dataset.encoder.get_feature_names(dataset.categorical)
 
-    #  Create dtypes for MCCE()
-    dtypes = dict([(x, "float") for x in cont_feat])
-    for x in cat_feat_encoded:
-        dtypes[x] = "category"
-    df = (dataset.df).astype(dtypes)
+if data_name == 'adult':
+    fixed_features = ['age', 'sex']
+    fixed_features_encoded = ['age', 'sex_Male']
+elif data_name == 'give_me_some_credit':
+    fixed_features = ['age']
+    fixed_features_encoded = ['age']
+elif data_name == 'compas':
+    fixed_features = ['age', 'sex', 'race']
+    fixed_features_encoded = ['age', 'sex_Male', 'race_Other']
 
-    start = time.time()
+#  Create dtypes for MCCE()
+dtypes = dict([(x, "float") for x in cont_feat])
+for x in cat_feat_encoded:
+    dtypes[x] = "category"
+df = (dataset.df).astype(dtypes)
 
-    # (3) Fit MCCE object
-    mcce = MCCE(fixed_features=fixed_features,\
-        fixed_features_encoded=fixed_features_encoded,
-            continuous=dataset.continuous, categorical=dataset.categorical,\
-                model=ml_model, seed=1)
+print("Fit trees")
+start = time.time()
+mcce = MCCE(dataset=dataset,
+            fixed_features=fixed_features,
+            fixed_features_encoded=fixed_features_encoded,
+            model=ml_model, 
+            seed=1)
 
-    mcce.fit(df.drop(dataset.target, axis=1), dtypes)
-    time_fit = time.time()
+mcce.fit(df.drop(dataset.target, axis=1), dtypes)
+time_fit = time.time()
 
-    synth_df = mcce.generate(test_factual.drop(dataset.target, axis=1), k=K)
-    time_generate = time.time()
+print("Sample observations from tree nodes")
+synth_df = mcce.generate(test_factual.drop(y_col, axis=1), k=K)
+time_generate = time.time()
 
-    mcce.postprocess(synth=synth_df, test=test_factual, response=y_col, \
-        inverse_transform=dataset.inverse_transform, cutoff=0.5)
-    time_postprocess = time.time()
+print("Process sampled observations")
+mcce.postprocess(cfs=synth_df, fact=test_factual, cutoff=0.5)
+time_postprocess = time.time()
 
-    end = time.time() - start
+print("Calculate timing")
+mcce.results_sparse['time (seconds)'] = time.time() - start
+mcce.results_sparse['fit (seconds)'] = time_fit - start
+mcce.results_sparse['generate (seconds)'] = time_generate - time_fit
+mcce.results_sparse['postprocess (seconds)'] = time_postprocess - time_generate
 
-    # Feasibility 
-    cols = dataset.df.columns.to_list()
-    cols.remove(dataset.target)
-    mcce.results_sparse['feasibility'] = feasibility(mcce.results_sparse, dataset.df, cols)
+print("Save the counterfactuals")
+results = mcce.results_sparse
+results['data'] = data_name
+results['method'] = 'mcce'
+results[y_col] = test_factual[y_col]
 
-    # Timing
-    mcce.results_sparse['time (seconds)'] = end
-    mcce.results_sparse['fit (seconds)'] = time_fit - start
-    mcce.results_sparse['generate (seconds)'] = time_generate - time_fit
-    mcce.results_sparse['postprocess (seconds)'] = time_postprocess - time_generate
-    
-    mcce.results_sparse['distance (seconds)'] = mcce.distance_cpu_time
-    mcce.results_sparse['violation (seconds)'] = mcce.violation_cpu_time
- 
-    # (5) Save results 
-    # mcce.results_sparse.to_csv(os.path.join(PATH, f"{data_name}_mcce_results_k_{K}_n_{n_test}.csv"))
-    
-    # (6) Print the counterfactuals inverted to their original feature values/ranges
-    results = mcce.results_sparse.copy()
-    results['data'] = data_name
-    results['method'] = 'mcce'
-    results['prediction'] = ml_model.predict_proba(results)[:, [1]]
-    
-    results = dataset.inverse_transform(results)
-    results.to_csv(os.path.join(PATH, f"{data_name}_mcce_results_k_{K}_n_{n_test}_inverse_transform.csv"))
+cols = ['data', 'method'] + cat_feat_encoded.tolist() + cont_feat + [y_col] + ['time (seconds)']
+results.sort_index(inplace=True)
+
+results[cols].to_csv(os.path.join(PATH, f"{data_name}_mcce_results_k_{K}_n_{n_test}.csv"))
 
 
 

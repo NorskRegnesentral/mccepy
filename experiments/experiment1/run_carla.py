@@ -9,7 +9,7 @@ import carla.recourse_methods.catalog as recourse_catalog
 
 import torch
 
-PATH = '../../Results_Test/experiment1/'
+PATH = 'Final_results_new'
 
 def save_csv(df, data_name):
     file_name = os.path.join(PATH, f"{data_name}_manifold_results.csv")
@@ -65,9 +65,16 @@ parser.add_argument(
     default="manifold_results.csv",
     help="Path to save results",
 )
+parser.add_argument(
+    "-ft",
+    "--force_train",
+    action='store_true',  # default is False
+    help="Whether to train the prediction model from scratch or not. Default will not train.",
+)
 
 args = parser.parse_args()
 n_test = args.number_of_samples
+force_train = args.force_train
 
 print(args.recourse_method)
 
@@ -93,7 +100,7 @@ for data_name in args.dataset:
         epochs=20,
         batch_size=1024,
         hidden_size=[18, 9, 3],
-        force_train=True, # don't forget to add this or it might load an older model from disk
+        force_train=force_train,
         )
     elif data_name == 'give_me_some_credit':
         ml_model.train(
@@ -101,7 +108,7 @@ for data_name in args.dataset:
         epochs=20,
         batch_size=2048,
         hidden_size=[18, 9, 3],
-        force_train=True, # don't forget to add this or it might load an older model from disk
+        force_train=force_train,
         )
     elif data_name == 'compas':
         ml_model.train(
@@ -109,7 +116,7 @@ for data_name in args.dataset:
         epochs=25,
         batch_size=25,
         hidden_size=[18, 9, 3],
-        force_train=True, 
+        force_train=force_train, 
         )
 
     factuals = predict_negative_instances(ml_model, dataset.df)

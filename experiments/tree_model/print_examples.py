@@ -1,11 +1,10 @@
+import os
+import argparse
 import warnings
 warnings.filterwarnings('ignore')
 
 import pandas as pd
 pd.set_option('display.max_columns', None)
-
-import os
-import argparse
 
 parser = argparse.ArgumentParser(description="Fit MCCE with various datasets.")
 parser.add_argument(
@@ -27,8 +26,8 @@ parser.add_argument(
     help="Number of instances per dataset",
 )
 parser.add_argument(
-    "-k",
-    "--k",
+    "-K",
+    "--K",
     type=int,
     default=10000,
     help="Number generated counterfactuals per test observation",
@@ -39,9 +38,9 @@ args = parser.parse_args()
 path = args.path
 data_name = args.dataset
 n_test = args.number_of_samples
-k = args.k
+K = args.K
 
-results_inverse = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_tree_model_k_{k}_n_{n_test}_inverse_transform.csv"), index_col=0)
+results_inverse = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_tree_model_k_{K}_n_{n_test}_inverse_transform.csv"), index_col=0)
 true_raw = pd.read_csv(os.path.join(path, f"{data_name}_tree_model_n_{n_test}_inverse_transform.csv"), index_col=0)
 true_raw['method'] = 'Original'
 

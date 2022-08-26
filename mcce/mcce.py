@@ -5,25 +5,25 @@ import pandas as pd
 from .cart import CARTMethod
 from .sample import SampleMethod
 
-from .metrics import distance, constraint_violation, success_rate
+from .metrics import distance
 
 METHODS_MAP = {'cart': CARTMethod, 'sample': SampleMethod}
 
 class MCCE:
     def __init__(self,
+                 dataset=None,
                  fixed_features=None,
                  fixed_features_encoded=None,
-                 continuous=None,
-                 categorical=None,
                  model=None,
                  seed=None
                  ):
 
-        # initialise arguments
+        # initialize arguments
+        self.dataset = dataset
         self.fixed_features = fixed_features  # features to condition on - the ones in the dataset
         self.fixed_features_encoded = fixed_features_encoded
-        self.continuous = continuous
-        self.categorical = categorical
+        self.continuous = dataset.continuous
+        self.categorical = dataset.categorical
 
         self.seed = seed
         self.model = model
@@ -39,7 +39,7 @@ class MCCE:
         self.n_df_rows, self.n_df_columns = np.shape(df)
         self.df_dtypes = dtypes
         self.mutable_features = [col for col in self.df_columns if (col not in self.fixed_features_encoded)]
-        self.cont_feat = [feat for feat in dtypes.keys() if dtypes[feat] != 'category']
+        self.continuous = [feat for feat in dtypes.keys() if dtypes[feat] != 'category']
 
         self.n_fixed, self.n_mutable = len(self.fixed_features_encoded), len(self.mutable_features)
         
@@ -82,7 +82,6 @@ class MCCE:
         # train
         self.predictor_matrix_columns = self.predictor_matrix.columns.to_numpy()
         for col, _ in self.visit_sequence.sort_values().iteritems():
-            # print(col)
             # initialise the method
             col_method = METHODS_MAP[self.method[col]](dtype=self.df_dtypes[col], random_state=self.seed)
             
@@ -109,9 +108,8 @@ class MCCE:
         synth_df_mutable = pd.DataFrame(data=np.zeros([self.k * n_test, self.n_mutable]), columns=self.mutable_features, index=synth_df.index)
 
         synth_df = pd.concat([synth_df, synth_df_mutable], axis=1)
-        # print(synth_df.head(10))
         start_time = time.time()
-        for col in self.mutable_features: # self.visit_sequence.sort_values().iteritems():
+        for col in self.mutable_features:
             # reload the method
             col_method = self.saved_methods[col]
             # predict with the method
@@ -126,33 +124,33 @@ class MCCE:
         synth_df = synth_df[test.columns]
         return synth_df
 
-    def postprocess(self, synth, test, response, inverse_transform=None, cutoff=0.5):
+    def postprocess(self, cfs, fact, cutoff=0.5, higher_cardinality=False):
         
         self.cutoff = cutoff
 
         # Predict response of generated data
-        synth[response] = self.model.predict(synth)
-        synth_positive = synth[synth[response]>=cutoff] # drop negative responses
+        cfs_positive = cfs[self.model.predict(cfs) >= cutoff]
         
         # Duplicate original test observations N times where N is number of positive counterfactuals
-        n_counterfactuals = synth_positive.groupby(synth_positive.index).size()
+        n_counterfactuals = cfs_positive.groupby(cfs_positive.index).size()
         n_counterfactuals = pd.DataFrame(n_counterfactuals, columns = ['N'])
 
-        test_repeated = test.copy()
+        fact_repeated = fact.copy()
 
-        test_repeated = test_repeated.join(n_counterfactuals)
-        test_repeated.dropna(inplace = True)
+        fact_repeated = fact_repeated.join(n_counterfactuals)
+        fact_repeated.dropna(inplace = True)
 
-        test_repeated = test_repeated.reindex(test_repeated.index.repeat(test_repeated.N))
-        test_repeated.drop(['N'], axis=1, inplace=True)
+        fact_repeated = fact_repeated.reindex(fact_repeated.index.repeat(fact_repeated.N))
+        fact_repeated.drop(['N'], axis=1, inplace=True)
 
-        self.test_repeated = test_repeated
+        self.fact_repeated = fact_repeated
 
-        self.results = self.calculate_metrics(synth=synth_positive, test=self.test_repeated, \
-            response=response, inverse_transform=inverse_transform) 
+        self.results = self.calculate_metrics(cfs=cfs_positive, 
+                                              fact=self.fact_repeated, 
+                                              higher_cardinality=higher_cardinality) 
 
-        ## Find the best row for each test obs
-
+        # Find the best row for each test obs
+        time1 = time.time()
         results_sparse = pd.DataFrame(columns=self.results.columns)
 
         for idx in list(set(self.results.index)):
@@ -162,66 +160,33 @@ class MCCE:
                 sparse_df = idx_df[idx_df.L0 == sparse] 
                 closest = min(sparse_df.L2) # find smallest Gower distance
                 close_df = sparse_df[sparse_df.L2 == closest].head(1)
-                
-                # if(close_df.shape[0]>1):
-                #     highest_feasibility = max(close_df.feasibility) #  3) find most feasible
-                #     close_df = close_df[close_df.feasibility == highest_feasibility].head(1)
 
             else: # if you have only one row - return that row
                 close_df = idx_df.to_frame().T
                 
             results_sparse = pd.concat([results_sparse, close_df], axis=0)
-
+        
+        time2 = time.time()
+        self.find_best_cpu_time = time2 - time1
         self.results_sparse = results_sparse
 
-    def calculate_metrics(self, synth, test, response, inverse_transform):
 
-        features = synth.columns.to_list()
-        features.remove(response)
-        synth.sort_index(inplace=True)
+    def calculate_metrics(self, cfs, fact, higher_cardinality=False): # inverse_transform
 
-        if inverse_transform:  # necessary for violation rate
-            df_decoded_cfs = inverse_transform(synth.copy())
-            df_decoded_factuals = inverse_transform(test.copy())
-
-        else:
-            df_decoded_cfs = synth.copy()
-            df_decoded_factuals = test.copy()
-
-
-        synth_metrics = synth.copy()
-        
-        # 1) Distance: Sparsity and Euclidean distance
-        factual = test[features]
-        counterfactuals = synth[features]
-        
         time1 = time.time()
-        distances = pd.DataFrame(distance(counterfactuals, factual, self.model), index=factual.index)
+        features = cfs.columns.to_list()
+        cfs.sort_index(inplace=True)
+
+        cfs_metrics = cfs.copy()
         
+        # Calculate sparsity and Euclidean distance
+        factual = fact[features]
+        counterfactuals = cfs[features]
+        
+        distances = pd.DataFrame(distance(counterfactuals, factual, self.dataset, higher_cardinality), index=factual.index)
+        cfs_metrics = pd.concat([cfs_metrics, distances], axis=1)
         time2 = time.time()
         self.distance_cpu_time = time2 - time1
-        synth_metrics = pd.concat([synth_metrics, distances], axis=1)
 
-        # # 2) Feasibility 
-        # cols = data.columns.to_list()
-        # cols.remove(response)
-
-        # time1 = time.time()
-        # synth_metrics['feasibility'] = feasibility(counterfactuals, data, cols)
-        
-        # time2 = time.time()
-        # self.feasibility_cpu_time = time2 - time1
-
-        # 3) Success
-        synth_metrics['success'] = 1
-
-        # 4) Violation
-        time1 = time.time()
-        violations = constraint_violation(df_decoded_cfs, df_decoded_factuals, \
-            self.continuous, self.categorical, self.fixed_features)
-        
-        synth_metrics['violation'] = violations
-        time2 = time.time()
-        self.violation_cpu_time = time2 - time1
-
-        return synth_metrics
+        return cfs_metrics
+    

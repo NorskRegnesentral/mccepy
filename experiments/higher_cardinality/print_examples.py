@@ -11,6 +11,7 @@ parser = argparse.ArgumentParser(description="Fit MCCE with various datasets.")
 parser.add_argument(
     "-p",
     "--path",
+    required=True,
     help="Path where results are saved",
 )
 parser.add_argument(
@@ -27,11 +28,17 @@ parser.add_argument(
     help="Number of instances per dataset",
 )
 parser.add_argument(
-    "-k",
-    "--k",
+    "-K",
+    "--K",
     type=int,
     default=10000,
     help="Number generated counterfactuals per test observation",
+)
+parser.add_argument(
+    "-ft",
+    "--force_train",
+    action='store_true',  # default is False
+    help="Whether to train the prediction model from scratch or not. Default will not train.",
 )
 
 args = parser.parse_args()
@@ -39,9 +46,10 @@ args = parser.parse_args()
 path = args.path
 data_name = args.dataset
 n_test = args.number_of_samples
-k = args.k
+K = args.K
+force_train = args.force_train
 
-results_inverse = pd.read_csv(os.path.join(path, f"adult_mcce_results_raw_data_k_{k}_n_{n_test}_inverse_transform.csv"), index_col=0)
+results_inverse = pd.read_csv(os.path.join(path, f"adult_mcce_results_raw_data_k_{K}_n_{n_test}.csv"), index_col=0)
 true_raw = pd.read_csv(os.path.join(path, f"adult_raw_data_n_{n_test}.csv"), index_col=0)
 
 results_inverse['method'] = 'MCCE'

@@ -11,6 +11,7 @@ from carla import MLModel
 
 from mcce.metrics import feasibility
 from mcce.mcce import MCCE
+from mcce.rf import RandomForestModel
 
 PATH = "Final_results_new/"
 # must do pip install . in CARLA_version_2 directory
@@ -32,78 +33,79 @@ parser.add_argument(
     help="Number of instances per dataset",
 )
 parser.add_argument(
-    "-k",
-    "--k",
+    "-K",
+    "--K",
     type=int,
     default=10000,
     help="Number generated counterfactuals per test observation",
 )
 
+
 args = parser.parse_args()
 
 data_name = args.dataset
 n_test = args.number_of_samples
-K = args.k
+K = args.K
 
 dataset = OnlineCatalog(data_name)
 
 # Fit predictive model
-class RandomForestModel(MLModel):
-    """The default way of implementing RandomForest from sklearn
-    https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html"""
+# class RandomForestModel(MLModel):
+#     """The default way of implementing RandomForest from sklearn
+#     https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html"""
 
-    def __init__(self, data):
-        super().__init__(data)
+#     def __init__(self, data):
+#         super().__init__(data)
 
-        # get preprocessed data
-        df_train = self.data.df_train
-        df_test = self.data.df_test
+#         # get preprocessed data
+#         df_train = self.data.df_train
+#         df_test = self.data.df_test
         
-        encoded_features = list(self.data.encoder.get_feature_names(self.data.categorical))
+#         encoded_features = list(self.data.encoder.get_feature_names(self.data.categorical))
         
-        x_train = df_train[self.data.continuous + encoded_features]
-        y_train = df_train[self.data.target]
+#         x_train = df_train[self.data.continuous + encoded_features]
+#         y_train = df_train[self.data.target]
 
-        self._feature_input_order = self.data.continuous + encoded_features
+#         self._feature_input_order = self.data.continuous + encoded_features
 
-        param = {
-            "max_depth": None,  # determines how deep the tree can go
-            "n_estimators": 200,
-            "min_samples_split": 3 # number of features to consider at each split
-        }
-        self._mymodel = RandomForestClassifier(**param)
-        self._mymodel.fit(
-                x_train,
-                y_train,
-            )
+#         param = {
+#             "max_depth": None,  # determines how deep the tree can go
+#             "n_estimators": 200,
+#             "min_samples_split": 3 # number of features to consider at each split
+#         }
+#         self._mymodel = RandomForestClassifier(**param)
+#         self._mymodel.fit(
+#                 x_train,
+#                 y_train,
+#             )
 
-    @property
-    def feature_input_order(self):
-        # List of the feature order the ml model was trained on
-        return self._feature_input_order
+#     @property
+#     def feature_input_order(self):
+#         # List of the feature order the ml model was trained on
+#         return self._feature_input_order
 
-    @property
-    def backend(self):
-        return "xgboost"
+#     @property
+#     def backend(self):
+#         return "xgboost"
 
-    @property
-    def raw_model(self):
-        return self._mymodel
+#     @property
+#     def raw_model(self):
+#         return self._mymodel
 
-    @property
-    def tree_iterator(self):
-        # make a copy of the trees, else feature names are not saved
-        booster_it = [booster for booster in self.raw_model.get_booster()]
-        # set the feature names
-        for booster in booster_it:
-            booster.feature_names = self.feature_input_order
-        return booster_it
+#     @property
+#     def tree_iterator(self):
+#         # make a copy of the trees, else feature names are not saved
+#         booster_it = [booster for booster in self.raw_model.get_booster()]
+#         # set the feature names
+#         for booster in booster_it:
+#             booster.feature_names = self.feature_input_order
+#         return booster_it
 
-    def predict(self, x):
-        return self._mymodel.predict(self.get_ordered_features(x))
+#     def predict(self, x):
+#         return self._mymodel.predict(self.get_ordered_features(x))
 
-    def predict_proba(self, x):
-        return self._mymodel.predict_proba(self.get_ordered_features(x))
+#     def predict_proba(self, x):
+#         return self._mymodel.predict_proba(self.get_ordered_features(x))
 
 ml_model = RandomForestModel(dataset)
 

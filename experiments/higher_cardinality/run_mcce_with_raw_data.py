@@ -13,22 +13,29 @@ import pandas as pd
 
 from mcce.mcce import MCCE
 
-PATH = "Final_results_new"
+# must do pip install . in CARLA_version_2 directory
 
-parser = argparse.ArgumentParser(description="Fit MCCE with various datasets.")
+parser = argparse.ArgumentParser(description="Fit MCCE when categorical features have more than two levels.")
+parser.add_argument(
+    "-p",
+    "--path",
+    type=str,
+    default="Final_results_new",
+    help="Path where results are saved",
+)
 parser.add_argument(
     "-n",
     "--number_of_samples",
     type=int,
     default=100,
-    help="Number of instances per dataset",
+    help="Number of test observations to generate counterfactuals for.",
 )
 parser.add_argument(
     "-K",
     "--K",
     type=int,
     default=10000,
-    help="Number generated counterfactuals per test observation",
+    help="Number of observations to sample from each end node for MCCE method.",
 )
 parser.add_argument(
     "-ft",
@@ -42,15 +49,24 @@ args = parser.parse_args()
 n_test = args.number_of_samples
 K = args.K
 force_train = args.force_train
+path = args.path
 seed = 1
 
 print("Load raw adult data")
 train_path = "Data/adult.data"
 test_path = "Data/adult.test"
-train = pd.read_csv(train_path, sep=", ", header=None, names=['age', 'workclass', 'fnlwgt', 'education', 'education-num', 'marital-status', 'occupation', 'relationship', 
-                                                              'race', 'sex', 'capital-gain', 'capital-loss', 'hours-per-week', 'native-country', 'income'])
-test = pd.read_csv(test_path, skiprows=1, sep=", ", header=None, names=['age', 'workclass', 'fnlwgt', 'education', 'education-num', 'marital-status', 
-                                                                        'occupation', 'relationship', 'race', 'sex', 'capital-gain', 'capital-loss', 'hours-per-week', 'native-country', 'income'])
+train = pd.read_csv(train_path, 
+                    sep=", ", 
+                    header=None, 
+                    names=['age', 'workclass', 'fnlwgt', 'education', 'education-num', 'marital-status', 'occupation', 'relationship', 
+                    'race', 'sex', 'capital-gain', 'capital-loss', 'hours-per-week', 'native-country', 'income'])
+
+test = pd.read_csv(test_path, 
+                   skiprows=1, 
+                   sep=", ", 
+                   header=None, 
+                   names=['age', 'workclass', 'fnlwgt', 'education', 'education-num', 'marital-status', 
+                   'occupation', 'relationship', 'race', 'sex', 'capital-gain', 'capital-loss', 'hours-per-week', 'native-country', 'income'])
 
 df = pd.concat([train, test], axis=0, ignore_index=True)
 df = df.drop(['education'], axis=1)
@@ -71,9 +87,10 @@ for feature in ["workclass", "marital-status", "occupation", "relationship", \
     mapping = d.to_dict()
     df[feature] = [mapping[item] for item in df[feature]]
 
+# Save processed data in the same folder
 df.to_csv("Data/train_not_normalized_data_from_carla.csv", index=False)
 
-print("Read in processed data using CARLA functionality")
+print("Read in processed data using CARLA")
 continuous = ["age", "fnlwgt", "education-num", "capital-gain", "hours-per-week", "capital-loss"]
 categorical = ["marital-status", "native-country", "occupation", "race", "relationship", "sex", "workclass"]
 immutable = ["age", "sex"]
@@ -88,25 +105,19 @@ dataset = CsvCatalog(file_path="Data/train_not_normalized_data_from_carla.csv",
 
 print("Fit predictive model")
 torch.manual_seed(0)
-ml_model = MLModelCatalog(
-        dataset, 
-        model_type="ann", 
-        load_online=False, 
-        backend="pytorch"
-    )
-ml_model.train(
-learning_rate=0.002,
-epochs=20,
-batch_size=1024,
-hidden_size=[18, 9, 3],
-force_train=force_train,
+ml_model = MLModelCatalog(dataset, 
+                          model_type="ann", 
+                          load_online=False, 
+                          backend="pytorch"
+                          )
+ml_model.train(learning_rate=0.002,
+               epochs=20,
+               batch_size=1024,
+               hidden_size=[18, 9, 3],
+               force_train=force_train,
 )
 
 print("Find factuals to generate counterfactuals for")
-factuals = predict_negative_instances(ml_model, dataset.df)
-test_factual = factuals.iloc[:n_test]
-
-print("Prepare data for MCCE")
 factuals = predict_negative_instances(ml_model, dataset.df)
 test_factual = factuals.iloc[:n_test]
 
@@ -156,31 +167,4 @@ results[y_col] = test_factual[y_col]
 cols = ['data', 'method'] + cat_feat_encoded.tolist() + cont_feat + [y_col] + ['time (seconds)']
 results.sort_index(inplace=True)
 
-results[cols].to_csv(os.path.join(PATH, f"adult_mcce_results_higher_cardinality_k_{K}_n_{n_test}.csv"))
-
-
-# results_sparse.to_csv(os.path.join(PATH, f"adult_mcce_results_raw_data_k_{K}_n_{n_test}.csv"))
-
-## Save the original factuals
-
-# orig_preds = ml_model.predict_proba(results_sparse)
-# new_preds = []
-# for x in orig_preds:
-#     new_preds.append(x[1])
-
-# results_inverse = dataset.inverse_transform(results_sparse)
-
-# results_inverse['pred'] = new_preds
-
-# results_inverse.to_csv(os.path.join(PATH, f"adult_mcce_results_raw_data_k_{K}_n_{n_test}_inverse_transform.csv"))
-
-# true_raw =  dataset.inverse_transform(test_factual)
-
-# orig_preds = ml_model.predict_proba(test_factual)
-# new_preds = []
-# for x in orig_preds:
-#     new_preds.append(x[1])
-
-# true_raw['pred'] = new_preds
-
-# true_raw.to_csv(os.path.join(PATH, f"adult_raw_data_n_{n_test}.csv"))
+results[cols].to_csv(os.path.join(path, f"adult_mcce_results_higher_cardinality_k_{K}_n_{n_test}.csv"))

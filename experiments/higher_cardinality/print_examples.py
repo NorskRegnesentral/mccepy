@@ -14,32 +14,33 @@ from carla.models.negative_instances import predict_negative_instances
 import os
 import argparse
 
-parser = argparse.ArgumentParser(description="Fit MCCE with various datasets.")
+parser = argparse.ArgumentParser(description="Print counterfactual examples generated with MCCE.")
 parser.add_argument(
     "-p",
     "--path",
-    required=True,
+    type=str,
+    default="Final_results_new",
     help="Path where results are saved",
-)
-parser.add_argument(
-    "-d",
-    "--dataset",
-    default='adult',
-    help="Datasets for experiment",
 )
 parser.add_argument(
     "-n",
     "--number_of_samples",
     type=int,
     default=100,
-    help="Number of instances per dataset",
+    help="Number of test observations to generate counterfactuals for.",
 )
 parser.add_argument(
     "-K",
     "--K",
     type=int,
     default=10000,
-    help="Number generated counterfactuals per test observation",
+    help="Number of observations to sample from each end node for MCCE method.",
+)
+parser.add_argument(
+    "-ft",
+    "--force_train",
+    action='store_true',  # default is False
+    help="Whether to train the prediction model from scratch or not. Default will not train.",
 )
 parser.add_argument(
     "-ft",

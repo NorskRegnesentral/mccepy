@@ -1,72 +1,33 @@
 import os
 import argparse
+import numpy as np
 import warnings
 warnings.filterwarnings('ignore')
-import numpy as np
+
+import pandas as pd
+pd.set_option('display.max_columns', None)
 
 import torch
 torch.manual_seed(0)
 
-from sklearn import metrics
 from sklearn.ensemble import RandomForestClassifier
 
 from carla.data.catalog import OnlineCatalog
 from carla.models.negative_instances import predict_negative_instances
 from carla import MLModel
 
-import pandas as pd
-pd.set_option('display.max_columns', None)
-
 from mcce.metrics import distance, constraint_violation, feasibility, success_rate
 
-parser = argparse.ArgumentParser(description="Fit MCCE with various datasets.")
-parser.add_argument(
-    "-p",
-    "--path",
-    required=True,
-    help="Path where results are saved",
-)
-parser.add_argument(
-    "-d",
-    "--dataset",
-    default='adult',
-    help="Datasets for experiment",
-)
-parser.add_argument(
-    "-n",
-    "--number_of_samples",
-    type=int,
-    default=100,
-    help="Number of instances per dataset",
-)
-parser.add_argument(
-    "-K",
-    "--K",
-    type=int,
-    default=10000,
-    help="Number generated counterfactuals per test observation",
-)
-
-
-args = parser.parse_args()
-
-path = args.path
-data_name = args.dataset
-n_test = args.number_of_samples
-K = args.K
-
-dataset = OnlineCatalog(data_name)
-
-class RandomForestModel2(MLModel):
+# Fit predictive model that takes into account MLModel (a CARLA class!)
+class RandomForestModel(MLModel):
     """The default way of implementing RandomForest from sklearn
     https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html"""
 
     def __init__(self, data):
         super().__init__(data)
 
-        # get preprocessed data
+        # training data
         df_train = self.data.df_train
-        df_test = self.data.df_test
         
         encoded_features = list(self.data.encoder.get_feature_names(self.data.categorical))
         
@@ -116,16 +77,57 @@ class RandomForestModel2(MLModel):
     def predict_proba(self, x):
         return self._mymodel.predict_proba(self.get_ordered_features(x))
 
-ml_model = RandomForestModel2(dataset)
+parser = argparse.ArgumentParser(description="Print MCCE metric results when predictive model is a decision tree.")
+parser.add_argument(
+    "-p",
+    "--path",
+    type=str,
+    default="Final_results_new",
+    help="Path where results are saved",
+)
+parser.add_argument(
+    "-d",
+    "--dataset",
+    type=str,
+    default="adult",
+    help="Datasets for experiment. Options are adult, give_me_some_credit, and compas.",
+)
+parser.add_argument(
+    "-n",
+    "--number_of_samples",
+    type=int,
+    default=100,
+    help="Number of test observations to generate counterfactuals for.",
+)
+parser.add_argument(
+    "-K",
+    "--K",
+    type=int,
+    default=10000,
+    help="Number of observations to sample from each end node for MCCE method.",
+)
 
+args = parser.parse_args()
+
+path = args.path
+data_name = args.dataset
+n_test = args.number_of_samples
+K = args.K
+
+# Load data set from CARLA
+dataset = OnlineCatalog(data_name)
+
+ml_model = RandomForestModel(dataset)
+
+# Find unhappy customers and choose which ones to make counterfactuals for
 factuals = predict_negative_instances(ml_model, dataset.df)
 test_factual = factuals.iloc[:n_test]
 
+# Read results
 df_cfs = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_tree_model_k_{K}_n_{n_test}.csv"), index_col=0)
-
 df_cfs.sort_index(inplace=True)
     
-# remove missing values
+# Remove missing values
 nan_idx = df_cfs.index[df_cfs.isnull().any(axis=1)]
 non_nan_idx = df_cfs.index[~(df_cfs.isnull()).any(axis=1)]
 
@@ -135,23 +137,24 @@ output_counterfactuals = df_cfs.copy()
 factual_without_nans = output_factuals.drop(index=nan_idx)
 counterfactuals_without_nans = output_counterfactuals.drop(index=nan_idx)
 
-# in case not all test obs have a generated counterfactual!
+# In case not all test obs have a generated counterfactual!
 factual_without_nans = factual_without_nans.loc[counterfactuals_without_nans.index.to_list()]
 
-# calculate metrics
+# Calculate metrics
 if len(counterfactuals_without_nans) > 0:
     results = dataset.inverse_transform(counterfactuals_without_nans[factuals.columns])
     results['method'] = 'mcce'
     results['data'] = data_name
     
-    # distance
+    # calculate distances
     distances = pd.DataFrame(distance(counterfactuals_without_nans, factual_without_nans, dataset, higher_card=False))
     distances.set_index(non_nan_idx, inplace=True)
     results = pd.concat([results, distances], axis=1)
 
+    # calculate feasibility
     results['feasibility'] = feasibility(counterfactuals_without_nans, factual_without_nans, dataset.df.columns)
     
-    # violation
+    # calculate violation
     violations = []
     df_decoded_cfs = dataset.inverse_transform(counterfactuals_without_nans)
     df_factuals = dataset.inverse_transform(factual_without_nans)
@@ -162,10 +165,10 @@ if len(counterfactuals_without_nans) > 0:
         violations.append(x[0])
     results['violation'] = violations
     
-    # success
+    # calculate success
     results['success'] = success_rate(counterfactuals_without_nans, ml_model, cutoff=0.5)
 
-    # time
+    # calculate time
     results['time (seconds)'] = df_cfs['time (seconds)'].mean() 
 
 

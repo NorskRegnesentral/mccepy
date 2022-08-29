@@ -1,6 +1,6 @@
-import argparse
 import os
 import time
+import argparse
 
 from carla.data.catalog import OnlineCatalog
 from carla.models.catalog import MLModelCatalog
@@ -10,9 +10,10 @@ import carla.recourse_methods.catalog as recourse_catalog
 import torch
 
 PATH = 'Final_results_new'
+# must do pip install . in CARLA_version_2 directory
 
 def save_csv(df, data_name):
-    file_name = os.path.join(PATH, f"{data_name}_manifold_results.csv")
+    file_name = os.path.join(PATH, f"{data_name}_manifold_results_just_revise3.csv")
 
     if os.path.exists(file_name):
         df.to_csv(file_name, mode='a', header=False, index=True)
@@ -39,7 +40,7 @@ parser.add_argument(
         "clue",
         "crud",
         "revise",
-        "face"
+        "face" # fixed reproducibility
     ],
     choices=[
         "cchvae",
@@ -76,14 +77,11 @@ args = parser.parse_args()
 n_test = args.number_of_samples
 force_train = args.force_train
 
-print(args.recourse_method)
-
 for data_name in args.dataset:
-
+    print(f"Training data set: {data_name}")
     # load catalog dataset
     dataset = OnlineCatalog(data_name)
 
-    import torch
     torch.manual_seed(0)
     
     ml_model = MLModelCatalog(
@@ -123,12 +121,13 @@ for data_name in args.dataset:
     test_factual = factuals.iloc[:n_test] # .reset_index()
 
     for rm in (args.recourse_method):
+        print(f"Finding counterfactuals using: {rm}")
         
         if rm == 'revise':
             
             start = time.time()
             hyperparams = {
-            "data_name": "adult",
+            "data_name": dataset.name,
                 "lambda": 0.5,
                 "optimizer": "adam",
                 "lr": 0.1,
@@ -191,7 +190,7 @@ for data_name in args.dataset:
 
             start = time.time()
             hyperparams = {
-                "data_name": "adult",
+                "data_name": dataset.name,
                 "target_class": [0, 1],
                 "lambda_param": 0.001,
                 "optimizer": "RMSprop",
@@ -246,7 +245,7 @@ for data_name in args.dataset:
 
             start = time.time()
             hyperparams = {
-                "data_name": "adult",
+                "data_name": dataset.name,
                 "batch_size": 1,
                 "kappa": 0.1,
                 "init_learning_rate": 0.01,

@@ -13,48 +13,71 @@ from carla.data.catalog import OnlineCatalog
 from carla.models.catalog import MLModelCatalog
 from carla.models.negative_instances import predict_negative_instances
 
-from mcce.metrics import feasibility
 from mcce.mcce import MCCE
+from mcce.metrics import distance, constraint_violation, feasibility, success_rate
 
 ## FOR EACH DATA SET you have to adjust n below - 
 ## for adult and gmc, I use 100, 1000, 10000 and the size of the data set
 ## for compas, I use 100, 1000, 5000, and the size of the data aset 
 
-PATH = "Final_results_new"
-
 parser = argparse.ArgumentParser(description="Fit various recourse methods from CARLA.")
+parser.add_argument(
+    "-p",
+    "--path",
+    type=str,
+    default="Final_results_new",
+    help="Path where results are saved",
+)
 parser.add_argument(
     "-d",
     "--dataset",
-    nargs="*",
+    type=str,
     default="adult",
-    choices=["adult", "give_me_some_credit", "compas"],
-    help="Datasets for experiment",
+    help="Datasets for experiment. Options are adult, give_me_some_credit, and compas.",
 )
 parser.add_argument(
     "-n",
     "--number_of_samples",
     type=int,
     default=100,
-    help="Number of instances per dataset",
+    help="Number of test observations to generate counterfactuals for.",
 )
 parser.add_argument(
     "-K",
     "--K",
     type=int,
     default=10000,
-    help="Number of instances to sample for MCCE.",
+    help="Number of observations to sample from each end node for MCCE method.",
 )
+parser.add_argument(
+    "-ft",
+    "--force_train",
+    action='store_true',  # default is False
+    help="Whether to train the prediction model from scratch or not. Default will not train.",
+)
+parser.add_argument(
+    "-s",
+    "--s",
+    type=int,
+    default=5,
+    help="Number of seeds to set for simulation.",
+)
+
 
 args = parser.parse_args()
 
-K = args.K
 n_test = args.number_of_samples
-seed = 1
+K = args.K
 data_name = args.dataset
+force_train = args.force_train
+num_seeds = args.s
+path = args.path
+seed = 1
 
+# Load data set from CARLA
 dataset = OnlineCatalog(data_name)
 
+# Train predictive model also from CARLA
 torch.manual_seed(0)
 ml_model = MLModelCatalog(
         dataset, 
@@ -69,7 +92,7 @@ if data_name == 'adult':
     epochs=20,
     batch_size=1024,
     hidden_size=[18, 9, 3],
-    force_train=True,
+    force_train=force_train,
     )
 elif data_name == 'give_me_some_credit':
     ml_model.train(
@@ -77,7 +100,7 @@ elif data_name == 'give_me_some_credit':
     epochs=20,
     batch_size=2048,
     hidden_size=[18, 9, 3],
-    force_train=True,
+    force_train=force_train,
     )
 elif data_name == 'compas':
     ml_model.train(
@@ -85,10 +108,10 @@ elif data_name == 'compas':
     epochs=25,
     batch_size=25,
     hidden_size=[18, 9, 3],
-    force_train=True,
+    force_train=force_train,
     )
 
-# (2) Find unhappy customers and choose which ones to make counterfactuals for
+# Find unhappy customers and choose which ones to make counterfactuals for
 factuals = predict_negative_instances(ml_model, dataset.df)
 test_factual = factuals.iloc[:n_test]
 
@@ -108,14 +131,13 @@ elif data_name == 'compas':
     fixed_features_encoded = ['age', 'sex_Male', 'race_Other']
     fixed_features = ['age', 'sex', 'race']
 
-#  Create dtypes for MCCE()
+#  Create data types for MCCE
 dtypes = dict([(x, "float") for x in cont_feat])
 for x in cat_feat_encoded:
     dtypes[x] = "category"
 df = (dataset.df).astype(dtypes)
 
-## Loop through various subsets of data and train trees on the smaller subsets - 48832 is the full data set
-
+print("Loop through various subsets of data and train trees on the smaller subsets")
 if data_name == 'adult': 
     n_list = [100, 1000, 10000, dataset.df.shape[0]]
 elif data_name == 'give_me_some_credit':
@@ -123,28 +145,33 @@ elif data_name == 'give_me_some_credit':
 elif data_name == 'compas':
     n_list = [100, 1000, 5000, dataset.df.shape[0]]
 
+all_results = pd.DataFrame()
+mcce = MCCE(dataset=dataset,
+            fixed_features=fixed_features,
+            fixed_features_encoded=fixed_features_encoded,
+            model=ml_model, 
+            seed=1)
 
-
-results = []
-results_pd = pd.DataFrame()
 for n in n_list:
-
-    if n == dataset.df.shape[0]:
-        
-        random.seed(0)
-        rows = random.sample(df.index.to_list(), n)
-        rows = np.sort(rows)
-        df_subset = df.loc[rows]
-        
-        print("Fit trees")
+    print(f"Number of rows: {n}.")
+    for s in range(num_seeds):
+        print(f"Seed: {s}.")
         start = time.time()
-        mcce = MCCE(dataset=dataset,
-                    fixed_features=fixed_features,
-                    fixed_features_encoded=fixed_features_encoded,
-                    model=ml_model, 
-                    seed=1)
-
-        mcce.fit(df.drop(dataset.target, axis=1), dtypes)
+        if n == dataset.df.shape[0]:
+            random.seed(s)
+            rows = random.sample(df.index.to_list(), n)
+            rows = np.sort(rows)
+            df_subset = df.loc[rows]
+            if(s > 0): # Only need to generate counterfactuals once for full data set
+                break
+        else:
+            random.seed(s)
+            rows = random.sample(df.index.to_list(), n)
+            rows = np.sort(rows)
+            df_subset = df.loc[rows]
+            
+        print("Fit trees")
+        mcce.fit(df_subset.drop(dataset.target, axis=1), dtypes)
         time_fit = time.time()
 
         print("Sample observations from tree nodes")
@@ -155,55 +182,58 @@ for n in n_list:
         mcce.postprocess(cfs=synth_df, fact=test_factual, cutoff=0.5)
         time_postprocess = time.time()
 
-        print("Calculate timing")
         mcce.results_sparse['time (seconds)'] = time.time() - start
-        mcce.results_sparse['fit (seconds)'] = time_fit - start
-        mcce.results_sparse['generate (seconds)'] = time_generate - time_fit
-        mcce.results_sparse['postprocess (seconds)'] = time_postprocess - time_generate
 
-        # Feasibility 
-        # cols = dataset.df.columns.to_list()
-        # cols.remove(dataset.target)
-        # mcce.results_sparse['feasibility'] = feasibility(mcce.results_sparse, dataset.df, cols)
+        df_cfs = mcce.results_sparse
+        df_cfs.sort_index(inplace=True)
+        df_cfs[y_col] = test_factual[y_col] # add back original response
 
-        # mcce.results_sparse['time (seconds)'] = timing
+        # Remove missing values
+        nan_idx = df_cfs.index[df_cfs.isnull().any(axis=1)]
+        non_nan_idx = df_cfs.index[~(df_cfs.isnull()).any(axis=1)]
 
-        results.append([mcce.results_sparse.L0.mean(), mcce.results_sparse.L2.mean(), mcce.results_sparse.feasibility.mean(), mcce.results_sparse.violation.mean(), mcce.results_sparse.shape[0], timing, n, 0])
-    else:
-        for s in range(5):
-            random.seed(s)
-            rows = random.sample(df.index.to_list(), n)
-            rows = np.sort(rows)
-            df_subset = df.loc[rows]
+        output_factuals = test_factual.loc[df_cfs.index.to_list()]
+        output_counterfactuals = df_cfs
 
-            start = time.time()
+        factual_without_nans = output_factuals.drop(index=nan_idx)
+        counterfactuals_without_nans = output_counterfactuals.drop(index=nan_idx)
 
-            mcce = MCCE(fixed_features=fixed_features,\
-                    fixed_features_encoded=fixed_features_encoded,
-                        continuous=dataset.continuous, categorical=dataset.categorical,\
-                            model=ml_model, seed=1)
-
-            mcce.fit(df.drop(dataset.target, axis=1), dtypes)
-
-            synth_df = mcce.generate(test_factual.drop(dataset.target, axis=1), k=100)
-            mcce.postprocess(synth=synth_df, test=test_factual, response=y_col, \
-                inverse_transform=dataset.inverse_transform, cutoff=0.5)
-
-            timing = time.time() - start
+        if len(counterfactuals_without_nans) > 0:
+            print(f"Calculating results for subset of size {n} and seed {s}")
+            results = dataset.inverse_transform(counterfactuals_without_nans[factuals.columns])
+            results['method'] = 'mcce'
+            results['data'] = data_name
+            results['n'] = n # number of training observations to train trees on
+            results['seed'] = s # seed number
             
-            # Feasibility 
-            cols = dataset.df.columns.to_list()
-            cols.remove(dataset.target)
-            mcce.results_sparse['feasibility'] = feasibility(mcce.results_sparse, dataset.df, cols)
+            # calculate distances
+            distances = pd.DataFrame(distance(counterfactuals_without_nans, factual_without_nans, dataset, higher_card=False))
+            distances.set_index(non_nan_idx, inplace=True)
+            results = pd.concat([results, distances], axis=1)
 
-            mcce.results_sparse['time (seconds)'] = timing
+            # calculate feasibility
+            results['feasibility'] = feasibility(counterfactuals_without_nans, factual_without_nans, dataset.df.columns)
+            
+            # calculate violation
+            violations = []
+            df_decoded_cfs = dataset.inverse_transform(counterfactuals_without_nans)
+            df_factuals = dataset.inverse_transform(factual_without_nans)
+            
+            total_violations = constraint_violation(df_decoded_cfs, df_factuals, \
+                dataset.continuous, dataset.categorical, dataset.immutables)
+            for x in total_violations:
+                violations.append(x[0])
+            results['violation'] = violations
+            
+            # calculate success
+            results['success'] = success_rate(counterfactuals_without_nans, ml_model, cutoff=0.5)
 
-            temp = mcce.results_sparse
-            temp['n'] = n
+            # calculate time
+            results['time (seconds)'] = df_cfs['time (seconds)'].mean() 
 
-            results.append([mcce.results_sparse.L0.mean(), mcce.results_sparse.L2.mean(), mcce.results_sparse.feasibility.mean(), mcce.results_sparse.violation.mean(), mcce.results_sparse.shape[0], timing, n, s])
+            all_results = pd.concat([all_results, results], axis=0)
 
-results2 = pd.DataFrame(results, columns=['L0', 'L2', 'feasibility', 'violation', 'NCE', 'timing', 'Ntest', 'seed'])
 
-results2.to_csv(os.path.join(PATH, f"{data_name}_mcce_results_k_{K}_n_{n_test}_with_various_training_amounts.csv"))
+cols = ['data', 'method', 'n', 'seed', 'L0', 'L1', 'L2', 'feasibility', 'violation', 'success', 'time (seconds)'] + cat_feat + cont_feat + [y_col]
+all_results[cols].to_csv(os.path.join(path, f"{data_name}_mcce_results_various_training_amounts_k_{K}_n_{n_test}.csv"))
 

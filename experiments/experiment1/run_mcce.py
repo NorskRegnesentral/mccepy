@@ -7,33 +7,36 @@ from carla.data.catalog import OnlineCatalog
 from carla.models.catalog import MLModelCatalog
 from carla.models.negative_instances import predict_negative_instances
 
-from mcce.metrics import feasibility
 from mcce.mcce import MCCE
 
-PATH = 'Final_results_new'
-
 parser = argparse.ArgumentParser(description="Fit MCCE with various datasets.")
+parser.add_argument(
+    "-p",
+    "--path",
+    type=str,
+    default="Final_results_new",
+    help="Path where results are saved",
+)
 parser.add_argument(
     "-d",
     "--dataset",
     type=str,
     default="adult",
-    choices=["adult", "give_me_some_credit", "compas"],
-    help="Datasets for experiment",
+    help="Datasets for experiment. Options are adult, give_me_some_credit, and compas.",
 )
 parser.add_argument(
     "-n",
     "--number_of_samples",
     type=int,
     default=100,
-    help="Number of instances per dataset",
+    help="Number of test observations to generate counterfactuals for.",
 )
 parser.add_argument(
     "-K",
     "--K",
     type=int,
-    default=10000,  # 1000 for Compas
-    help="Number generated counterfactuals per test observation",
+    default=10000,
+    help="Number of observations to sample from each end node for MCCE method.",
 )
 parser.add_argument(
     "-ft",
@@ -41,19 +44,19 @@ parser.add_argument(
     action='store_true',  # default is False
     help="Whether to train the prediction model from scratch or not. Default will not train.",
 )
-
 args = parser.parse_args()
 
 n_test = args.number_of_samples
 K = args.K # 1000 for Compas
 data_name = args.dataset
 force_train = args.force_train
+path = args.path
 seed = 1
 
 print(f"Load {data_name} data set")
 dataset = OnlineCatalog(data_name)
 
-print("Load predictive model")
+print("Load/train predictive model")
 torch.manual_seed(0)
 ml_model = MLModelCatalog(
         dataset, 
@@ -146,7 +149,7 @@ results[y_col] = test_factual[y_col]
 cols = ['data', 'method'] + cat_feat_encoded.tolist() + cont_feat + [y_col] + ['time (seconds)']
 results.sort_index(inplace=True)
 
-results[cols].to_csv(os.path.join(PATH, f"{data_name}_mcce_results_k_{K}_n_{n_test}.csv"))
+results[cols].to_csv(os.path.join(path, f"{data_name}_mcce_results_k_{K}_n_{n_test}.csv"))
 
 
 

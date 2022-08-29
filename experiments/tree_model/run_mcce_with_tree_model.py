@@ -3,6 +3,7 @@ import time
 import argparse
 import warnings
 warnings.filterwarnings('ignore')
+
 import numpy as np
 
 from sklearn import metrics
@@ -14,41 +15,9 @@ from carla import MLModel
 
 from mcce.mcce import MCCE
 
-PATH = "Final_results_new/"
 # must do pip install . in CARLA_version_2 directory
 
-parser = argparse.ArgumentParser(description="Fit MCCE with various datasets.")
-parser.add_argument(
-    "-d",
-    "--dataset",
-    type=str,
-    default="adult",
-    help="Datasets for experiment",
-)
-parser.add_argument(
-    "-n",
-    "--number_of_samples",
-    type=int,
-    default=100,
-    help="Number of instances per dataset",
-)
-parser.add_argument(
-    "-K", 
-    "--K",
-    type=int,
-    default=10000,  # 1000 for Compas
-    help="Number generated counterfactuals per test observation",
-)
-
-args = parser.parse_args()
-
-data_name = args.dataset
-n_test = args.number_of_samples
-K = args.K
-
-dataset = OnlineCatalog(data_name)
-
-# Fit predictive model
+# Fit predictive model that takes into account MLModel (a CARLA class!)
 class RandomForestModel(MLModel):
     """The default way of implementing RandomForest from sklearn
     https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html"""
@@ -58,7 +27,6 @@ class RandomForestModel(MLModel):
 
         # get preprocessed data
         df_train = self.data.df_train
-        df_test = self.data.df_test
         
         encoded_features = list(self.data.encoder.get_feature_names(self.data.categorical))
         
@@ -92,20 +60,52 @@ class RandomForestModel(MLModel):
     def raw_model(self):
         return self._mymodel
 
-    @property
-    def tree_iterator(self):
-        # make a copy of the trees, else feature names are not saved
-        booster_it = [booster for booster in self.raw_model.get_booster()]
-        # set the feature names
-        for booster in booster_it:
-            booster.feature_names = self.feature_input_order
-        return booster_it
-
     def predict(self, x):
         return self._mymodel.predict(self.get_ordered_features(x))
 
     def predict_proba(self, x):
         return self._mymodel.predict_proba(self.get_ordered_features(x))
+
+
+parser = argparse.ArgumentParser(description="Fit MCCE when the underlying predictive function is a decision tree.")
+parser.add_argument(
+    "-p",
+    "--path",
+    type=str,
+    default="Final_results_new",
+    help="Path where results are saved",
+)
+parser.add_argument(
+    "-d",
+    "--dataset",
+    type=str,
+    default="adult",
+    help="Datasets for experiment. Options are adult, give_me_some_credit, and compas.",
+)
+parser.add_argument(
+    "-n",
+    "--number_of_samples",
+    type=int,
+    default=100,
+    help="Number of test observations to generate counterfactuals for.",
+)
+parser.add_argument(
+    "-K",
+    "--K",
+    type=int,
+    default=10000,
+    help="Number of observations to sample from each end node for MCCE method.",
+)
+
+args = parser.parse_args()
+
+data_name = args.dataset
+n_test = args.number_of_samples
+K = args.K
+path = args.path
+
+# Load data set from CARLA
+dataset = OnlineCatalog(data_name)
 
 ml_model = RandomForestModel(dataset)
 
@@ -160,7 +160,7 @@ mcce.postprocess(cfs=synth_df, fact=test_factual, cutoff=0.5, higher_cardinality
 time_postprocess = time.time()
 end = time.time() - start
 
-print("Save results")
+# Timings
 mcce.results_sparse['time (seconds)'] = time.time() - start
 mcce.results_sparse['fit (seconds)'] = time_fit - start
 mcce.results_sparse['generate (seconds)'] = time_generate - time_fit
@@ -171,7 +171,8 @@ results['data'] = 'adult'
 results['method'] = 'mcce'
 results[y_col] = test_factual[y_col]
 
+print("Save results")
 cols = ['data', 'method'] + cat_feat_encoded.tolist() + cont_feat + [y_col] + ['time (seconds)']
 results.sort_index(inplace=True)
 
-results[cols].to_csv(os.path.join(PATH, f"{data_name}_mcce_results_tree_model_k_{K}_n_{n_test}.csv"))
+results[cols].to_csv(os.path.join(path, f"{data_name}_mcce_results_tree_model_k_{K}_n_{n_test}.csv"))

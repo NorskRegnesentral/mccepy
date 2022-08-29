@@ -1,66 +1,29 @@
 import os
 import argparse
+import numpy as np
 import warnings
 warnings.filterwarnings('ignore')
-import numpy as np
 
 import torch
 torch.manual_seed(0)
 
-from sklearn import metrics
+import pandas as pd
+pd.set_option('display.max_columns', None)
 from sklearn.ensemble import RandomForestClassifier
+from sklearn import metrics
 
 from carla.data.catalog import OnlineCatalog
 from carla.models.negative_instances import predict_negative_instances
 from carla import MLModel
 
-import pandas as pd
-pd.set_option('display.max_columns', None)
-
-parser = argparse.ArgumentParser(description="Fit MCCE with various datasets.")
-parser.add_argument(
-    "-p",
-    "--path",
-    help="Path where results are saved",
-)
-parser.add_argument(
-    "-d",
-    "--dataset",
-    default='adult',
-    help="Datasets for experiment",
-)
-parser.add_argument(
-    "-n",
-    "--number_of_samples",
-    type=int,
-    default=100,
-    help="Number of instances per dataset",
-)
-parser.add_argument(
-    "-K",
-    "--K",
-    type=int,
-    default=10000,
-    help="Number generated counterfactuals per test observation",
-)
-
-args = parser.parse_args()
-
-path = args.path
-data_name = args.dataset
-n_test = args.number_of_samples
-K = args.K
-
-dataset = OnlineCatalog(data_name)
-
-class RandomForestModel2(MLModel):
+class RandomForestModel(MLModel):
     """The default way of implementing RandomForest from sklearn
     https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html"""
 
     def __init__(self, data):
         super().__init__(data)
 
-        # get preprocessed data
+        # training data
         df_train = self.data.df_train
         df_test = self.data.df_test
         
@@ -112,7 +75,46 @@ class RandomForestModel2(MLModel):
     def predict_proba(self, x):
         return self._mymodel.predict_proba(self.get_ordered_features(x))
 
-ml_model = RandomForestModel2(dataset)
+parser = argparse.ArgumentParser(description="Print counterfactual examples generated when predictive model is a decision tree.")
+parser.add_argument(
+    "-p",
+    "--path",
+    type=str,
+    default="Final_results_new",
+    help="Path where results are saved",
+)
+parser.add_argument(
+    "-d",
+    "--dataset",
+    type=str,
+    default="adult",
+    help="Datasets for experiment. Options are adult, give_me_some_credit, and compas.",
+)
+parser.add_argument(
+    "-n",
+    "--number_of_samples",
+    type=int,
+    default=100,
+    help="Number of test observations to generate counterfactuals for.",
+)
+parser.add_argument(
+    "-K",
+    "--K",
+    type=int,
+    default=10000,
+    help="Number of observations to sample from each end node for MCCE method.",
+)
+
+args = parser.parse_args()
+
+path = args.path
+data_name = args.dataset
+n_test = args.number_of_samples
+K = args.K
+
+dataset = OnlineCatalog(data_name)
+
+ml_model = RandomForestModel(dataset)
 
 factuals = predict_negative_instances(ml_model, dataset.df)
 test_factual = factuals.iloc[:n_test]

@@ -136,27 +136,37 @@ for n in n_list:
         rows = np.sort(rows)
         df_subset = df.loc[rows]
         
+        print("Fit trees")
         start = time.time()
-
-        mcce = MCCE(fixed_features=fixed_features,\
-                fixed_features_encoded=fixed_features_encoded,
-                    continuous=dataset.continuous, categorical=dataset.categorical,\
-                        model=ml_model, seed=1)
+        mcce = MCCE(dataset=dataset,
+                    fixed_features=fixed_features,
+                    fixed_features_encoded=fixed_features_encoded,
+                    model=ml_model, 
+                    seed=1)
 
         mcce.fit(df.drop(dataset.target, axis=1), dtypes)
+        time_fit = time.time()
 
-        synth_df = mcce.generate(test_factual.drop(dataset.target, axis=1), k=100)
-        mcce.postprocess(synth=synth_df, test=test_factual, response=y_col, \
-            inverse_transform=dataset.inverse_transform, cutoff=0.5)
+        print("Sample observations from tree nodes")
+        synth_df = mcce.generate(test_factual.drop(dataset.target, axis=1), k=K)
+        time_generate = time.time()
 
-        timing = time.time() - start
+        print("Process sampled observations")
+        mcce.postprocess(cfs=synth_df, fact=test_factual, cutoff=0.5)
+        time_postprocess = time.time()
+
+        print("Calculate timing")
+        mcce.results_sparse['time (seconds)'] = time.time() - start
+        mcce.results_sparse['fit (seconds)'] = time_fit - start
+        mcce.results_sparse['generate (seconds)'] = time_generate - time_fit
+        mcce.results_sparse['postprocess (seconds)'] = time_postprocess - time_generate
 
         # Feasibility 
-        cols = dataset.df.columns.to_list()
-        cols.remove(dataset.target)
-        mcce.results_sparse['feasibility'] = feasibility(mcce.results_sparse, dataset.df, cols)
+        # cols = dataset.df.columns.to_list()
+        # cols.remove(dataset.target)
+        # mcce.results_sparse['feasibility'] = feasibility(mcce.results_sparse, dataset.df, cols)
 
-        mcce.results_sparse['time (seconds)'] = timing
+        # mcce.results_sparse['time (seconds)'] = timing
 
         results.append([mcce.results_sparse.L0.mean(), mcce.results_sparse.L2.mean(), mcce.results_sparse.feasibility.mean(), mcce.results_sparse.violation.mean(), mcce.results_sparse.shape[0], timing, n, 0])
     else:

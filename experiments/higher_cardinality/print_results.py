@@ -92,7 +92,7 @@ y = dataset.df_test['income']
 pred = ml_model.predict_proba(dataset.df_test)
 pred = [row[1] for row in pred]
 factuals = predict_negative_instances(ml_model, dataset.df)
-test_factual = factuals.iloc[:100]
+test_factual = factuals.iloc[:n_test]
 
 print(f"Calculating results")
 
@@ -105,8 +105,8 @@ df_cfs.sort_index(inplace=True)
 nan_idx = df_cfs.index[df_cfs.isnull().any(axis=1)]
 non_nan_idx = df_cfs.index[~(df_cfs.isnull()).any(axis=1)]
 
-output_factuals = test_factual.copy()
-output_counterfactuals = df_cfs.copy()
+output_factuals = test_factual.loc[df_cfs.index.to_list()]
+output_counterfactuals = df_cfs
 
 factual_without_nans = output_factuals.drop(index=nan_idx)
 counterfactuals_without_nans = output_counterfactuals.drop(index=nan_idx)
@@ -142,25 +142,22 @@ if len(counterfactuals_without_nans) > 0:
     # time
     results['time (seconds)'] = df_cfs['time (seconds)'].mean() 
 
-print(results.head(2))
-print(df_factuals.head(2))
+
+print("Concat all results")
+cols = ['method', 'L0', 'L2', 'feasibility', 'success', 'violation', 'time (seconds)']
+temp = results[cols]  # pd.concat([all_results[cols], results[cols]], axis=0)
+
+print("Writing results")
+to_write = temp[['method', 'L0', 'L2', 'feasibility', 'violation', 'success', 'time (seconds)']].groupby(['method']).mean()
+to_write.reset_index(inplace=True)
+
+to_write_sd = temp[['method', 'L0', 'L2', 'feasibility', 'violation', 'success']].groupby(['method']).std()
+to_write_sd.reset_index(inplace=True)
+to_write_sd.rename(columns={'L0': 'L0_sd', 'L2': 'L2_sd', 'feasibility': 'feasibility_sd', 'violation': 'violation_sd', 'success': 'success_sd'}, inplace=True)
 
 
-# print("Concat all results")
-# cols = ['method', 'L0', 'L2', 'feasibility', 'success', 'violation', 'time (seconds)']
-# temp = results[cols]  # pd.concat([all_results[cols], results[cols]], axis=0)
+CE_N = temp.groupby(['method']).size().reset_index().rename(columns={0: 'CE_N'})
+to_write = pd.concat([to_write, to_write_sd[['L0_sd', 'L2_sd', 'feasibility_sd', 'violation_sd', 'success_sd']], CE_N.CE_N], axis=1)
+to_write = to_write[['method', 'L0', 'L0_sd', 'L2', 'L2_sd', 'feasibility', 'feasibility_sd', 'violation', 'violation_sd', 'success', 'CE_N', 'time (seconds)']]
 
-# print("Writing results")
-# to_write = temp[['method', 'L0', 'L2', 'feasibility', 'violation', 'success', 'time (seconds)']].groupby(['method']).mean()
-# to_write.reset_index(inplace=True)
-
-# to_write_sd = temp[['method', 'L0', 'L2', 'feasibility', 'violation', 'success']].groupby(['method']).std()
-# to_write_sd.reset_index(inplace=True)
-# to_write_sd.rename(columns={'L0': 'L0_sd', 'L2': 'L2_sd', 'feasibility': 'feasibility_sd', 'violation': 'violation_sd', 'success': 'success_sd'}, inplace=True)
-
-
-# CE_N = temp.groupby(['method']).size().reset_index().rename(columns={0: 'CE_N'})
-# to_write = pd.concat([to_write, to_write_sd[['L0_sd', 'L2_sd', 'feasibility_sd', 'violation_sd', 'success_sd']], CE_N.CE_N], axis=1)
-# to_write = to_write[['method', 'L0', 'L0_sd', 'L2', 'L2_sd', 'feasibility', 'feasibility_sd', 'violation', 'violation_sd', 'success', 'CE_N', 'time (seconds)']]
-
-# print(to_write.to_string())
+print(to_write.to_string())

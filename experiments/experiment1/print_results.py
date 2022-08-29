@@ -103,7 +103,7 @@ elif data_name == 'compas':
 pred = ml_model.predict_proba(dataset.df_test)
 pred = [row[1] for row in pred]
 factuals = predict_negative_instances(ml_model, dataset.df)
-test_factual = factuals.iloc[:100]
+test_factual = factuals.iloc[:n_test]
 
 all_results = pd.DataFrame()
 for method in ['cchvae', 'cem-vae', 'revise', 'clue', 'crud', 'face', 'mcce']:
@@ -121,8 +121,8 @@ for method in ['cchvae', 'cem-vae', 'revise', 'clue', 'crud', 'face', 'mcce']:
     nan_idx = df_cfs.index[df_cfs.isnull().any(axis=1)]
     non_nan_idx = df_cfs.index[~(df_cfs.isnull()).any(axis=1)]
 
-    output_factuals = test_factual.copy()
-    output_counterfactuals = df_cfs.copy()
+    output_factuals = test_factual.loc[df_cfs.index.to_list()]
+    output_counterfactuals = df_cfs
 
     factual_without_nans = output_factuals.drop(index=nan_idx)
     counterfactuals_without_nans = output_counterfactuals.drop(index=nan_idx)
@@ -134,7 +134,7 @@ for method in ['cchvae', 'cem-vae', 'revise', 'clue', 'crud', 'face', 'mcce']:
         results['data'] = data_name
         
         # distance
-        distances = pd.DataFrame(distance(counterfactuals_without_nans, factual_without_nans, ml_model))
+        distances = pd.DataFrame(distance(counterfactuals_without_nans, factual_without_nans, dataset, higher_card=False))
         distances.set_index(non_nan_idx, inplace=True)
         results = pd.concat([results, distances], axis=1)
 
@@ -174,7 +174,7 @@ print("Concat all results")
 cols = ['method', 'L0', 'L2', 'feasibility', 'success', 'violation', 'time (seconds)']
 temp = all_results[cols]  # pd.concat([all_results[cols], results[cols]], axis=0)
 
-print("Writing results")
+print(f"Writing results for {data_name}")
 to_write = temp[['method', 'L0', 'L2', 'feasibility', 'violation', 'success', 'time (seconds)']].groupby(['method']).mean()
 to_write.reset_index(inplace=True)
 

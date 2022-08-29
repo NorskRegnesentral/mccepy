@@ -8,7 +8,6 @@ torch.manual_seed(0)
 
 import pandas as pd
 pd.set_option('display.max_columns', 30)
-# pd.set_option('display.width', 80)
 
 from carla.data.catalog import OnlineCatalog
 from carla.models.catalog import MLModelCatalog
@@ -102,7 +101,7 @@ pred = ml_model.predict_proba(dataset.df_test)
 pred = [row[1] for row in pred]
 
 factuals = predict_negative_instances(ml_model, dataset.df)
-test_factual = factuals.iloc[:100]
+test_factual = factuals.iloc[:n_test]
 
 results = dataset.inverse_transform(test_factual[factuals.columns])
 results['method'] = 'original'
@@ -128,6 +127,9 @@ for method in ['cchvae', 'cem-vae', 'revise', 'clue', 'crud', 'face', 'mcce']:
 
     factual_without_nans = output_factuals.drop(index=nan_idx)
     counterfactuals_without_nans = output_counterfactuals.drop(index=nan_idx)
+
+    # in case not all test obs have a generated counterfactual!
+    factual_without_nans = factual_without_nans.loc[counterfactuals_without_nans.index.to_list()]
 
     # counterfactuals
     if len(counterfactuals_without_nans) > 0:
@@ -172,8 +174,6 @@ if data_name == 'adult':
     'hours-per-week', 'marital-status', 'native-country', \
     'occupation', 'race', 'relationship', 'sex', 'workclass']
 
-    print(to_write[cols].round(0).to_string()) # to_latex(index=False, float_format="%.0f", )
-
 elif data_name == 'give_me_some_credit':
     
     cols = ['method', 'age', 'RevolvingUtilizationOfUnsecuredLines', 'NumberOfTime30-59DaysPastDueNotWorse', 'DebtRatio', 'MonthlyIncome', 'NumberOfOpenCreditLinesAndLoans', 
@@ -184,7 +184,16 @@ elif data_name == 'give_me_some_credit':
     cols = ['Method', 'Age', 'Unsec. Lines', 'Nb Days Past 30', 'Debt Ratio', 'Month Inc.', 'Nb Credit Lines', 'Nb Times 90 Days Late', 'Nb Real Estate Loans', 'Nb Times 60 Days Past', 'Nb Dep.']
 
     to_write.columns = cols
-    print(to_write[cols].round(0).to_string())
+
+elif data_name == 'compas':
+    cols = ['method', 'age', 'two_year_recid', 'priors_count', 'length_of_stay', 'c_charge_degree', 'race', 'sex']
+    to_write = results[cols].loc[40]
+
+    cols = ['Method', 'Age', 'Two Year Recid', 'Priors Count', 'Length of Stay', 'Charge Degree', 'Race', 'Sex']
+
+    to_write.columns = cols
+
+print(to_write[cols].round(0).to_string())
  
 
     

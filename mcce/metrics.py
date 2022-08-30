@@ -117,7 +117,7 @@ def constraint_violation(
     
     Returns
     -------
-        List containing the number of violations (i.e., fixed feature changes) per counterfactual. 
+        List containing the number of violations (i.e., immutables changes) per counterfactual. 
     """
 
     def intersection(lst1, lst2):
@@ -125,26 +125,26 @@ def constraint_violation(
 
     continuous = dataset.continuous
     categorical = dataset.categorical
-    fixed_features = dataset.immutables
+    immutables = dataset.immutables
 
     decoded_cfs.sort_index(inplace=True)
     decoded_factuals.sort_index(inplace=True)
 
-    cfs_continuous_fixed = decoded_cfs[intersection(continuous, fixed_features)]
-    factual_continuous_fixed = decoded_factuals[intersection(continuous, fixed_features)]
+    cfs_continuous_immutables = decoded_cfs[intersection(continuous, immutables)]
+    factual_continuous_immutables = decoded_factuals[intersection(continuous, immutables)]
 
     continuous_violations = np.invert(
-        np.isclose(cfs_continuous_fixed, factual_continuous_fixed)
+        np.isclose(cfs_continuous_immutables, factual_continuous_immutables)
     )
     continuous_violations = np.sum(continuous_violations, axis=1).reshape(
         (-1, 1)
     )  # sum over features
 
     # check categorical by boolean comparison
-    cfs_categorical_fixed = decoded_cfs[intersection(categorical, fixed_features)]
-    factual_categorical_fixed = decoded_factuals[intersection(categorical, fixed_features)]
+    cfs_categorical_immutables = decoded_cfs[intersection(categorical, immutables)]
+    factual_categorical_immutables = decoded_factuals[intersection(categorical, immutables)]
     
-    categorical_violations = cfs_categorical_fixed != factual_categorical_fixed
+    categorical_violations = cfs_categorical_immutables != factual_categorical_immutables
     categorical_violations = np.sum(categorical_violations.values, axis=1).reshape(
         (-1, 1)
     )  # sum over features

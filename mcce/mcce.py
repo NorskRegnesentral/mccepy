@@ -25,7 +25,7 @@ class MCCE:
     Methods
     -------
     fit :
-        Fit the decision trees iteratively, starting with only the fixed features.
+        Fit the decision trees iteratively, starting with only the immutables.
     generate : 
         Samples observations from the leaf nodes of the fitted decision trees based on a set of feature values.
     postprocess :
@@ -44,23 +44,23 @@ class MCCE:
         self.dataset = dataset
         self.continuous = dataset.continuous
         self.categorical = dataset.categorical
-        self.fixed_features = dataset.immutables
+        self.immutables = dataset.immutables
 
         # Get the new categorical feature names after encoding
         self.categorical_encoded = dataset.encoder.get_feature_names(self.categorical).tolist()
         
-        # Get the new fixed feature names after encoding
-        fixed_features_encoded = []
-        for fixed in self.fixed_features:
-            if fixed in self.categorical:
+        # Get the new immutable feature names after encoding
+        immutables_encoded = []
+        for immutable in self.immutables:
+            if immutable in self.categorical:
                 for new_col in self.categorical_encoded:
-                    match = re.search(fixed, new_col)
+                    match = re.search(immutable, new_col)
                     if match:
-                        fixed_features_encoded.append(new_col)
+                        immutables_encoded.append(new_col)
             else:
-                fixed_features_encoded.append(fixed)
+                immutables_encoded.append(immutable)
 
-        self.fixed_features_encoded = fixed_features_encoded
+        self.immutables_encoded = immutables_encoded
 
         self.seed = seed
         self.model = model
@@ -77,7 +77,7 @@ class MCCE:
             df, 
             dtypes):
         """
-        Fit the decision trees iteratively, starting with only the fixed features.
+        Fit the decision trees iteratively, starting with only the immutables.
 
         Parameters
         ----------
@@ -94,13 +94,13 @@ class MCCE:
         self.df_columns = df.columns.tolist()
         self.n_df_rows, self.n_df_columns = np.shape(df)
         self.df_dtypes = dtypes
-        self.mutable_features = [col for col in self.df_columns if (col not in self.fixed_features_encoded)]
+        self.mutable_features = [col for col in self.df_columns if (col not in self.immutables_encoded)]
         self.continuous = [feat for feat in dtypes.keys() if dtypes[feat] != 'category']
 
-        self.n_fixed, self.n_mutable = len(self.fixed_features_encoded), len(self.mutable_features)
+        self.n_immutables, self.n_mutable = len(self.immutables_encoded), len(self.mutable_features)
         
         # column indices of mutable features
-        self.visit_sequence = [index for index, col in enumerate(self.df_columns) if (col in self.fixed_features_encoded)] # if (col in self.mutable_features)
+        self.visit_sequence = [index for index, col in enumerate(self.df_columns) if (col in self.immutables_encoded)] # if (col in self.mutable_features)
         for index, col in enumerate(self.df_columns):
             if col in self.mutable_features:
                 self.visit_sequence.append(index)
@@ -114,7 +114,7 @@ class MCCE:
         # create list of methods to use - currently only cart implemented
         self.method = []
         for col in self.visited_columns:
-            if col in self.fixed_features_encoded:
+            if col in self.immutables_encoded:
                 self.method.append('sample') # these will be fit but not sampled 
             else:
                 self.method.append('cart')
@@ -145,8 +145,8 @@ class MCCE:
             
             # fit the method
             col_predictors = self.predictor_matrix_columns[self.predictor_matrix.loc[col].to_numpy() == 1]
-            
             col_method.fit(X_df=df[col_predictors], y_df=df[col])
+
             # save the method
             if self.method[col] == 'cart':
                 self.trees[col] = col_method.leaves_y_dict
@@ -173,8 +173,8 @@ class MCCE:
         self.k = k
         n_test = test_factual.shape[0]
 
-        # create data set with the fixed features repeated k times
-        synth_df = test_factual[self.fixed_features_encoded]
+        # create data set with the immutables repeated k times
+        synth_df = test_factual[self.immutables_encoded]
         synth_df = pd.concat([synth_df] * self.k)
         synth_df.sort_index(inplace=True)
 

@@ -123,9 +123,6 @@ cont_feat = dataset.continuous
 cat_feat = dataset.categorical
 cat_feat_encoded = dataset.encoder.get_feature_names(dataset.categorical)
 
-fixed_features_encoded = ['age', 'sex_1']
-fixed_features = ['age', 'sex']
-
 dtypes = dict([(x, "float") for x in cont_feat])
 for x in cat_feat_encoded:
     dtypes[x] = "category"

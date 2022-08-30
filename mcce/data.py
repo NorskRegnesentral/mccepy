@@ -18,7 +18,7 @@ class Data():
         Dictionary containing the data types of each feature.
     response : str
         The name of the response in the dataset. 
-    fixed_features : list
+    immutables : list
         List of features that should be fixed when generating the counterfactuals. Cannot be empty. 
         These are the original (not encoded) feature names.
     encoding_method : str, default: OneHot_drop_first
@@ -55,14 +55,13 @@ class Data():
                  feature_order, 
                  dtypes, 
                  response, 
-                 fixed_features,
+                 immutables,
                  encoding_method="OneHot_drop_first",
                  scaling_method="MinMax"):
         
         df = pd.read_csv(path, header=0, names=feature_order) # assume no index column
-        self.immutables = fixed_features # to aline with CARLA package
-        self.fixed_features = fixed_features
-        
+
+        self.immutables = immutables
         self.target = response
         self.feature_order = feature_order
         self.dtypes = dtypes
@@ -103,18 +102,18 @@ class Data():
         # Get the new categorical feature names after encoding
         self.categorical_encoded = self.encoder.get_feature_names(self.categorical).tolist()
         
-        # Get the new fixed feature names after encoding
-        fixed_features_encoded = []
-        for fixed in fixed_features:
-            if fixed in self.categorical:
+        # Get the new immutable feature names after encoding
+        immutables_encoded = []
+        for immutable in immutables:
+            if immutable in self.categorical:
                 for new_col in self.categorical_encoded:
-                    match = re.search(fixed, new_col)
+                    match = re.search(immutable, new_col)
                     if match:
-                        fixed_features_encoded.append(new_col)
+                        immutables_encoded.append(new_col)
             else:
-                fixed_features_encoded.append(fixed)
+                immutables_encoded.append(immutable)
 
-        self.fixed_features_encoded = fixed_features_encoded
+        self.immutables_encoded = immutables_encoded
         
 
     def transform(self, df):

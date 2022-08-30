@@ -47,6 +47,8 @@ class CARTMethod(Method):
     def fit(self, X_df, y_df):
         """
         Fit CART based on the data type of y_df
+        Haven't figured out if we should normalize/one-hot encode the features?!
+
         Parameters
         ----------
         X_df : pd.DataFrame
@@ -56,7 +58,12 @@ class CARTMethod(Method):
         Returns
         -------
         """
-        X_df, y_df = self.prepare_dfs(X_df=X_df, y_df=y_df, normalise_num_cols=False, one_hot_cat_cols=True)
+        # print(X_df.columns)
+        X_df, y_df = self.prepare_dfs(X_df=X_df, y_df=y_df, normalise_num_cols=False, one_hot_cat_cols=False)
+        
+        self.X_df_after_one_hot = X_df
+        # print(X_df.columns)
+
         if self.dtype in NUM_COLS_DTYPES:
             self.y_real_min, self.y_real_max = np.min(y_df), np.max(y_df)
 

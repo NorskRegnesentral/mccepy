@@ -44,6 +44,7 @@ class Method(ABC):
 
     def prepare_dfs(self, X_df, y_df=None, normalise_num_cols=True, one_hot_cat_cols=True, fit=True):
         X_df = X_df.copy()
+        self.train_cols = X_df.columns.tolist()
 
         if y_df is not None and self.dtype in NUM_COLS_DTYPES:
             y_df = y_df.copy()
@@ -64,7 +65,7 @@ class Method(ABC):
                 for col in self.num_cols_range:
                     X_df[col] = (X_df[col] - self.num_cols_range[col]['min']) / (self.num_cols_range[col]['max'] - self.num_cols_range[col]['min'])
                     X_df[col] = np.clip(X_df[col], 0, 1)
-
+        
         if one_hot_cat_cols:
             # Avoid the Dummy Variable Trap
             # https://towardsdatascience.com/one-hot-encoding-multicollinearity-and-the-dummy-variable-trap-b5840be3c41a

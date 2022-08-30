@@ -12,17 +12,18 @@ cd mccepy
 pip install -r requirements.txt
 ```
 
-## Examples
+## Example - Use MCCE stand alone
 
-### A. Use MCCE stand alone
+For other examples (e.g., how to use MCCE with the CARLA package), see examples/.
 
 This example uses the [US adult census dataset](https://archive.ics.uci.edu/ml/datasets/adult) in the Data/ repository. Although there are some predefined data and model classes (see examples/Example_notebook.ipynb), in this Readme, we define the data/model classes from scratch.
 
 
-1. Initialize the ```Data``` class with the path to the data file, column names, feature types, response name, a list of fixed features, and potential encoding and scaling methods. 
+1. Load data using ```pandas``` and specify column names, feature types, response name, and a list of immutable features,.
 
 ```Python
 import pandas as pd
+
 feature_order = ['age', 'workclass', 'fnlwgt', 'education-num', 'marital-status', 'occupation', 
                  'relationship', 'race', 'sex', 'hours-per-week']
                  
@@ -40,7 +41,7 @@ dtypes = {"age": "float",
 
 categorical = ['workclass', 'marital-status', 'occupation', 'relationship', 'race', 'sex']
 continuous = ['age', 'fnlwgt', 'education-num', 'hours-per-week']
-fixed_features = ['age', 'sex']
+immutable_features = ['age', 'sex']
 target = ['income']
 features = categorical + continuous
 
@@ -51,10 +52,10 @@ df = df[features + target]
 
 ```
 
-Scale the continuous features between 0 and 1. Encode the categorical features using one-hot encoding
+Here we scale the continuous features between 0 and 1 and encode the categorical features using one-hot encoding (drop the first level).
 
 ```Python
-from sklearn import preprocessing, metrics
+from sklearn import preprocessing
 
 encoder = preprocessing.OneHotEncoder(drop="first", sparse=False).fit(df[categorical])
 df_encoded = encoder.transform(df[categorical])
@@ -70,7 +71,7 @@ df = pd.concat([df_scaled, df_encoded, df[target]], axis=1)
 
 ```
 
-Define an inverse function to go easilby back to non scaled/encoded version
+Define an inverse function to go easily back to non scaled/encoded version of the features.
 
 ```Python
 def inverse_transform(df, 
@@ -87,30 +88,77 @@ def inverse_transform(df,
     return pd.concat([df_categorical, df_continuous], axis=1)
 ```
 
-Find the fixed features in their encoded form
+Since the feature "sex" is a categorical feature with two levels, the encoded version of the data set now has a new feature name. Below, we find its new "encoded name":
 
 ```Python
-fixed_features_encoded = []
-for fixed in fixed_features:
-    if fixed in categorical:
+immutable_features_encoded = []
+for immutable in immutable_features:
+    if immutable in categorical:
         for new_col in categorical_encoded:
-            match = re.search(fixed, new_col)
+            match = re.search(immutable, new_col)
             if match:
-                fixed_features_encoded.append(new_col)
+                immutable_features_encoded.append(new_col)
     else:
-        fixed_features_encoded.append(fixed)
+        immutable_features_encoded.append(immutable)
 
 ```
 
-2. Train a random forest to predict Income>=50000
-
+Create data object to feed into MCCE method
 
 ```Python
+class Dataset():
+    def __init__(self, 
+                 immutable_features, 
+                 target,
+                 categorical,
+                 immutable_features_encoded,
+                 continuous,
+                 features,
+                 encoder,
+                 scaler,
+                 inverse_transform,
+                 ):
+        
+        self.immutable_features = immutable_features
+        self.target = target
+        self.feature_order = feature_order
+        self.dtypes = dtypes
+
+        self.categorical = categorical
+        self.continuous = continuous
+        self.features = self.categorical + self.continuous
+        self.cols = self.features + [self.target]
+        self.immutable_features_encoded = immutable_features_encoded
+        self.encoder = encoder
+        self.scaler = scaler
+        self.inverse_transform = inverse_transform
+        
+dataset = Dataset(immutable_features, 
+                  target,
+                  categorical,
+                  immutable_features_encoded,
+                  continuous,
+                  features,
+                  encoder,
+                  scaler,
+                  inverse_transform)
+
+dtypes = dict([(x, "float") for x in continuous])
+for x in categorical_encoded:
+    dtypes[x] = "category"
+df = (df).astype(dtypes)
+```
+
+Train a random forest to predict Income>=50000
+
+```Python
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+
 y = df[target]
 X = df.drop(target, axis=1)
-test_size = 0.33
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=42)
 clf = RandomForestClassifier(max_depth=None, random_state=0)
 ml_model = clf.fit(X_train, y_train)
 
@@ -129,7 +177,7 @@ print(f"The out-of-sample AUC is {round(test_auc, 2)}")
 
 ```
 
-3. Decide which observations to generate counterfactual explanations for.
+Decide which observations to generate counterfactual explanations for.
 
 ```Python
 import numpy as np
@@ -141,54 +189,8 @@ test_factual = factuals.iloc[:5]
 
 ```
 
-4. Create data objects to pass to MCCE
 
-```Python
-class Dataset():
-    def __init__(self, 
-                 fixed_features, 
-                 target,
-                 categorical,
-                 fixed_features_encoded,
-                 continuous,
-                 features,
-                 encoder,
-                 scaler,
-                 inverse_transform,
-                 ):
-        
-        self.fixed_features = fixed_features
-        self.target = target
-        self.feature_order = feature_order
-        self.dtypes = dtypes
-
-        self.categorical = categorical
-        self.continuous = continuous
-        self.features = self.categorical + self.continuous
-        self.cols = self.features + [self.target]
-        self.fixed_features_encoded = fixed_features_encoded
-        self.encoder = encoder
-        self.scaler = scaler
-        self.inverse_transform = inverse_transform
-        
-dataset = Dataset(fixed_features, 
-                  target,
-                  categorical,
-                  fixed_features_encoded,
-                  continuous,
-                  features,
-                  encoder,
-                  scaler,
-                  inverse_transform)
-
-dtypes = dict([(x, "float") for x in continuous])
-for x in categorical_encoded:
-    dtypes[x] = "category"
-df = (df).astype(dtypes)
-
-```
-
-5. Initialize MCCE object and generate counterfactual explanations
+Use MCCE to generate counterfactual explanations
 
 ```Python
 from mcce import MCCE
@@ -207,7 +209,7 @@ mcce.postprocess(cfs=cfs, test_factual=test_factual, cutoff=0.5)
 
 ```
 
-6. Print original feature values for five test observations
+Print original feature values for the five test observations
 
 ```Python
 cfs = mcce.results_sparse
@@ -222,7 +224,7 @@ decoded_factuals = dataset.inverse_transform(test_factual,
                                              categorical,
                                              categorical_encoded)[feature_order]
 
-decoded_factuals
+print(decoded_factuals)
 
 ```
 
@@ -253,7 +255,7 @@ decoded_cfs = dataset.inverse_transform(cfs,
                                         continuous,
                                         categorical,
                                         categorical_encoded)[feature_order]
-decoded_cfs
+print(decoded_cfs)
 ```
 
 ```Python
@@ -270,79 +272,4 @@ age  workclass    fnlwgt  education-num  marital-status  occupation  \
 2             0     0    0            40.0  
 3             0     0    1            40.0  
 4             0     0    1            40.0  
-```
-
-
-### B. Use MCCE with the [CARLA](https://github.com/carla-recourse/CARLA) python package
-
-1.  Load packages and Adult data set
-
-```Python
-from carla.data.catalog import OnlineCatalog
-from carla.models.catalog import MLModelCatalog
-from carla.models.negative_instances import predict_negative_instances
-
-from mcce import MCCE
-
-dataset = OnlineCatalog('adult')
-
-```
-
-2. Fit multi-layer perceptron with CARLA
-
-```Python
-ml_model = MLModelCatalog(
-        dataset, 
-        model_type="ann", 
-        load_online=False, 
-        backend="pytorch"
-    )
-
-ml_model.train(
-    learning_rate=0.002,
-    epochs=20,
-    batch_size=1024,
-    hidden_size=[18, 9, 3],
-    force_train=False, # Will not train a new model
-    )
-
-factuals = predict_negative_instances(ml_model, dataset.df)
-test_factual = factuals.iloc[:5]
-```
-
-3. Create data objects to pass to MCCE
-
-```Python
-y_col = dataset.target
-cont_feat = dataset.continuous
-
-cat_feat = dataset.categorical
-cat_feat_encoded = dataset.encoder.get_feature_names(dataset.categorical)
-
-fixed_features = ['age', 'sex_Male']
-
-dtypes = dict([(x, "float") for x in cont_feat])
-for x in cat_feat_encoded:
-    dtypes[x] = "category"
-df = (dataset.df).astype(dtypes)
-
-```
-
-4. Generate counterfactuals with MCCE
-
-```Python
-mcce = MCCE(fixed_features=fixed_features, continuous=dataset.continuous, categorical=dataset.categorical,\
-            model=ml_model, seed=1, catalog=dataset.catalog)
-
-mcce.fit(df.drop(y_col, axis=1), dtypes) # fit the decision trees
-
-synth_df = mcce.generate(test_factual.drop(y_col, axis=1), k=100) # for each test obs
-
-mcce.postprocess(data=df, synth=synth_df, test=test_factual, response=y_col, \
-    inverse_transform=dataset.inverse_transform, cutoff=0.5) # postprocess the samples
-
-# print average metrics across all test observations
-print([mcce.results_sparse.L0.mean(), mcce.results_sparse.L2.mean(), mcce.results_sparse.feasibility.mean(),\
-  mcce.results_sparse.violation.mean(), mcce.results_sparse.shape[0]])
-    
 ```

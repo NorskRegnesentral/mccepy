@@ -1,4 +1,5 @@
 import os
+import sys
 import argparse
 import numpy as np
 import warnings
@@ -138,7 +139,11 @@ test_factual = factuals.iloc[:n_test]
 
 test_factual = dataset.inverse_transform(test_factual[factuals.columns])
 
-df_cfs = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_tree_model_k_{k}_n_{n_test}.csv"), index_col=0)
+try:
+    df_cfs = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_tree_model_k_{k}_n_{n_test}.csv"), index_col=0)
+except:
+    sys.exit(f"No MCCE results saved for k {k} and n_test {n_test} in {path}")
+
 df_cfs.sort_index(inplace=True)
     
 # remove missing values

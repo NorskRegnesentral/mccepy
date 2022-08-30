@@ -42,7 +42,7 @@ class Method(ABC):
     def predict(self):
         pass
 
-    def prepare_dfs(self, X_df, y_df=None, normalise_num_cols=True, one_hot_cat_cols=True, fit=True):
+    def prepare_dfs(self, X_df, y_df=None, normalise_num_cols=False, one_hot_cat_cols=False, fit=True):
         X_df = X_df.copy()
         self.train_cols = X_df.columns.tolist()
 

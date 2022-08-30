@@ -1,4 +1,5 @@
 import os
+import sys
 import argparse
 import warnings
 warnings.filterwarnings('ignore')
@@ -55,12 +56,12 @@ force_train = args.force_train
 print("Read in processed data using CARLA functionality")
 continuous = ["age", "fnlwgt", "education-num", "capital-gain", "hours-per-week", "capital-loss"]
 categorical = ["marital-status", "native-country", "occupation", "race", "relationship", "sex", "workclass"]
-immutable = ["age", "sex"]
+immutables = ["age", "sex"]
 
 dataset = CsvCatalog(file_path="Data/train_not_normalized_data_from_carla.csv",
                      continuous=continuous,
                      categorical=categorical,
-                     immutables=immutable,
+                     immutables=immutables,
                      target='income',
                      encoding_method="OneHot_drop_first", # New!
                      )
@@ -90,7 +91,11 @@ test_factual = factuals.iloc[:n_test]
 
 print(f"Calculating results")
 
-cfs = pd.read_csv(os.path.join(path, f"adult_mcce_results_higher_cardinality_k_{k}_n_{n_test}.csv"), index_col=0)
+try:
+    cfs = pd.read_csv(os.path.join(path, f"adult_mcce_results_higher_cardinality_k_{k}_n_{n_test}.csv"), index_col=0)
+except:
+    sys.exit(f"No MCCE results saved for k {k} and n_test {n_test} in {path}")
+    
 
 df_cfs = cfs.drop(['method', 'data'], axis=1)
 df_cfs.sort_index(inplace=True)

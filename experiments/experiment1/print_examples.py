@@ -113,9 +113,17 @@ for method in ['cchvae', 'cem-vae', 'revise', 'clue', 'crud', 'face', 'mcce']:
     print(f"Finding examples for {method}")
 
     if method == 'mcce':
-        cfs = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_k_{k}_n_{n_test}.csv"), index_col=0)
+        try:
+            cfs = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_k_{k}_n_{n_test}.csv"), index_col=0)
+        except:
+            print(f"No {method} results saved for k {k} and {n_test} in {path}")
+            continue
     else:
-        cfs = pd.read_csv(os.path.join(path, f"{data_name}_manifold_results.csv"), index_col=0)
+        try:
+            cfs = pd.read_csv(os.path.join(path, f"{data_name}_carla_results_n_{n_test}.csv"), index_col=0)
+        except:
+            print(f"No {method} results saved for k {k} and {n_test} in {path}")
+            continue
     
     df_cfs = cfs[cfs['method'] == method].drop(['method',	'data'], axis=1)
     df_cfs.sort_index(inplace=True)

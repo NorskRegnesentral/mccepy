@@ -17,12 +17,14 @@ parser = argparse.ArgumentParser(description="Fit MCCE with various datasets.")
 parser.add_argument(
     "-p",
     "--path",
+    type=str,
     required=True,
     help="Path where results are saved",
 )
 parser.add_argument(
     "-d",
     "--dataset",
+    type=str,
     default='adult',
     help="Datasets for experiment",
 )
@@ -34,8 +36,8 @@ parser.add_argument(
     help="Number of instances per dataset",
 )
 parser.add_argument(
-    "-K",
-    "--K",
+    "-k",
+    "--k",
     type=int,
     default=10000,
     help="Number generated counterfactuals per test observation",
@@ -52,7 +54,7 @@ args = parser.parse_args()
 path = args.path
 data_name = args.dataset
 n_test = args.number_of_samples
-K = args.K
+k = args.k
 force_train = args.force_train
 
 print(f"Load {data_name} data set")
@@ -111,7 +113,7 @@ for method in ['cchvae', 'cem-vae', 'revise', 'clue', 'crud', 'face', 'mcce']:
     print(f"Finding examples for {method}")
 
     if method == 'mcce':
-        cfs = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_k_{K}_n_{n_test}.csv"), index_col=0)
+        cfs = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_k_{k}_n_{n_test}.csv"), index_col=0)
     else:
         cfs = pd.read_csv(os.path.join(path, f"{data_name}_manifold_results.csv"), index_col=0)
     

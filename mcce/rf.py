@@ -1,8 +1,24 @@
 from sklearn.ensemble import RandomForestClassifier
 
 class RandomForestModel():
-    """The default way of implementing RandomForest from sklearn
-    https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html"""
+    """
+    Trains a random forest model using the sklearn RandomForestClassifier method. 
+    
+    Parameters
+    ----------
+    data : mcce.Data
+        Object of class mcce.Data which contains the data to train the model on and a set
+        of other attributions like which features are continuous, categorical, and fixed.
+    
+    Methods
+    -------
+    predict : 
+        Predicts the response/target for a data set based on the fitted random forest.
+    predict_proba :
+        Outputs the predicted probability (between 0 and 1) for a data set based on the fitted random forest.
+    get_ordered_features :
+        Returns a pd.DataFrame where the features have the same ordering as the original data set. 
+    """
 
     def __init__(self, data):
 
@@ -46,10 +62,50 @@ class RandomForestModel():
         return booster_it
 
     def predict(self, x):
+        """
+        Predicts the response/target for a data set based on the fitted random forest.
+        
+        Parameters
+        ----------
+        x : pd.DataFrame
+            DataFrame to predict a response for.
+        
+        Returns
+        -------
+            List of predictions
+        
+        """
+
         return self._mymodel.predict(self.get_ordered_features(x))
 
     def predict_proba(self, x):
+        """
+        Outputs the predicted probability (between 0 and 1) for a data set based on the fitted random forest.
+        
+        Parameters
+        ----------
+        x : pd.DataFrame
+            DataFrame to predict a response for.
+        
+        Returns
+        -------
+            List of predicted probabilities.
+        
+        """
         return self._mymodel.predict_proba(self.get_ordered_features(x))
     
     def get_ordered_features(self, x):
+        """
+        Returns a pd.DataFrame where the features have the same ordering as the original data set. 
+        
+        Parameters
+        ----------
+        x : pd.DataFrame
+            DataFrame to predict a response for.
+        
+        Returns
+        -------
+            pd.DataFrame with a potentially new column order
+        
+        """
         return x[self.feature_input_order]

@@ -1,33 +1,77 @@
+import re
 import pandas as pd
 import numpy as np
-import re
-
-from sklearn import preprocessing, metrics
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
-from sklearn.pipeline import Pipeline
-
-from .mcce import MCCE
+from sklearn import preprocessing
 
 
 class Data():
+    """
+    Class to make it easy to load a CSV file of data and encode and scale the features using sklearn.
+    
+    Parameters
+    ----------
+    path : str
+        Path where data is saved locally. 
+    feature_order : list
+        List containing the correct feature order when displaying the data.
+    dtypes : dict
+        Dictionary containing the data types of each feature.
+    response : str
+        The name of the response in the dataset. 
+    fixed_features : list
+        List of features that should be fixed when generating the counterfactuals. Cannot be empty. 
+        These are the original (not encoded) feature names.
+    encoding_method : str, default: OneHot_drop_first
+        Type of OneHotEncoding {OneHot, OneHot_drop_binary, OneHot_drop_first}. Default will drop the first level if the 
+        categorical feature has more than two levels. 
+        Set to "Identity" for no encoding.
+    scaling_method : str, default: MinMax
+        Type of sklearn scaler to use. MinMax will scale all continuous features between 0 and 1.
+    
+    Methods
+    -------
+    transform :
+        Function to transform the features using the desired scaling and encoding functionality.
+    inverse_transform : 
+        Function to reverse the encoding/scaling to get the features back in their original form. 
+    get_pipeline_element :
+    fit_encoder :
+        Fit the sklearn encoder to the original features. This will one-hot encode the features. 
+    fit_scaler :
+        Fit the sklearn scaler to the original features. This will scale (e.g., between 0 and 1) the features.
+    scale :
+        Scale the continuous features using the fit_scaler. 
+    descale :
+        Descale the continuous features (i.e., transform back to their original scales).
+    encode :
+        Encode the categorical features using fit_encoder. 
+    decode :
+        Decode the categorical features (i.e., transform back to their original levels).
+    
+    """
 
-    def __init__(self, \
-        path, 
-        feature_order, 
-        dtypes, 
-        response, 
-        fixed_features,  # these are the original feature names
-        encoding_method="OneHot_drop_first",
-        scaling_method="MinMax"):
+    def __init__(self,
+                 path, 
+                 feature_order, 
+                 dtypes, 
+                 response, 
+                 fixed_features,
+                 encoding_method="OneHot_drop_first",
+                 scaling_method="MinMax"):
         
         df = pd.read_csv(path, header=0, names=feature_order) # assume no index column
+        self.immutables = fixed_features # to aline with CARLA package
         self.fixed_features = fixed_features
+        
         self.target = response
         self.feature_order = feature_order
         self.dtypes = dtypes
         self.encoding_method = encoding_method
         self.scaling_method = scaling_method
+
+        # TO DO: Check if response in dtypes
+        # Check if response in feature_order
+        # Check if response in df.columns
 
         self.categorical = [feat for feat in self.dtypes.keys() if dtypes[feat] == 'category']
         self.categorical.remove(self.target)
@@ -56,9 +100,10 @@ class Data():
         # Process the data
         self.df = self.transform(self.df)
 
-        # Can we get the fixed feature names after the transformation?
+        # Get the new categorical feature names after encoding
         self.categorical_encoded = self.encoder.get_feature_names(self.categorical).tolist()
-
+        
+        # Get the new fixed feature names after encoding
         fixed_features_encoded = []
         for fixed in fixed_features:
             if fixed in self.categorical:
@@ -69,11 +114,22 @@ class Data():
             else:
                 fixed_features_encoded.append(fixed)
 
-        # print(type(fixed_features_encoded))
         self.fixed_features_encoded = fixed_features_encoded
         
 
     def transform(self, df):
+        """
+        Function to transform the features using the desired scaling and encoding functionality.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+
+        Returns
+        -------
+        output : pd.DataFrame
+                With transformed features.
+        """
         
         output = df.copy()
 
@@ -87,15 +143,36 @@ class Data():
         return output
 
     def inverse_transform(self, df):
+        """
+        Function to inverse transform the features back to their original non-scaled/non-encoded feature values.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+
+        Returns
+        -------
+        output : pd.DataFrame
+                With original features scales/encodings.
+        """
         
         output = df.copy()
 
-        for trans_name, trans_function in self._inverse_pipeline:
+        for _, trans_function in self._inverse_pipeline:
             output = trans_function(output)
 
         return output
 
     def get_pipeline_element(self, key):
+        """
+        Get an element from the pipeline.
+        Parameters
+        ----------
+        key : str
+            Element of the pipeline to return
+        Returns
+        -------
+        """
         
         key_idx = list(zip(*self._pipeline))[0].index(key)  # find key in pipeline
         return self._pipeline[key_idx][1]
@@ -113,6 +190,21 @@ class Data():
         ]
         
     def fit_encoder(self, df, encoding_method="OneHot_drop_first"):
+        """
+        Fit desired sklearn encoder.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+        encoding_method : str, default: OneHot_drop_first
+            The type of encoding to do. The default drops the first level of a categorical
+            features with more than two levels. 
+
+        Returns
+        -------
+        output : sklearn encoder
+    
+        """
         
         if encoding_method == "OneHot":
             encoder = preprocessing.OneHotEncoder(
@@ -136,6 +228,20 @@ class Data():
 
 
     def fit_scaler(self, df, scaling_method="MinMax"):
+        """
+        Fit desired sklearn scaler.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+        scaling_method : str, default: MinMax
+            The type of scaling to do. The default scales the continuous features between 0 and 1.
+
+        Returns
+        -------
+        output : sklearn scaler
+    
+        """
         
         if scaling_method == "MinMax":
             scaler = preprocessing.MinMaxScaler().fit(df)
@@ -145,14 +251,25 @@ class Data():
             scaler = preprocessing.FunctionTransformer(func=None, inverse_func=None)
         else:
             raise ValueError("Scaling Method not known")
-        
-        # X_scaled = self.scaler.transform(df)
-        # X_scaled = pd.DataFrame(X_scaled, columns=df.columns, index=df.index)
-
-        return scaler # X_scaled[cols]
+        return scaler
 
 
     def scale(self, fitted_scaler, features, df):
+        """
+        Apply the fit sklearn scaler.
+
+        Parameters
+        ----------
+        fitted_scaler : fitted sklearn scaler
+        features : list
+            List of continuous features to scale. 
+        df : pd.DataFrame
+        
+        Returns
+        -------
+        output : pd.DataFrame
+    
+        """
         
         output = df.copy()
         output[features] = fitted_scaler.transform(output[features])
@@ -160,7 +277,22 @@ class Data():
         return output
 
 
-    def descale(self, fitted_scaler, features, df) -> pd.DataFrame:
+    def descale(self, fitted_scaler, features, df):
+        """
+        Reverse the scaling applied using the fit sklearn scaler.
+
+        Parameters
+        ----------
+        fitted_scaler : fitted sklearn scaler
+        features : list
+            List of continuous features to scale. 
+        df : pd.DataFrame
+        
+        Returns
+        -------
+        output : pd.DataFrame
+    
+        """
         
         output = df.copy()
         output[features] = fitted_scaler.inverse_transform(output[features])
@@ -169,7 +301,21 @@ class Data():
 
 
     def encode(self, fitted_encoder, features, df):
+        """
+        Encode the categorical features using the fit sklearn encoder.
+
+        Parameters
+        ----------
+        fitted_encoder : fitted sklearn encoder
+        features : list
+            List of continuous features to scale. 
+        df : pd.DataFrame
         
+        Returns
+        -------
+        output : pd.DataFrame
+    
+        """
         output = df.copy()
         encoded_features = fitted_encoder.get_feature_names(features)
         output[encoded_features] = fitted_encoder.transform(output[features])
@@ -179,7 +325,21 @@ class Data():
 
 
     def decode(self, fitted_encoder, features, df):
+        """
+        Reverse the feature encoding using the fit sklearn encoder.
+
+        Parameters
+        ----------
+        fitted_encoder : fitted sklearn encoder
+        features : list
+            List of continuous features to scale. 
+        df : pd.DataFrame
         
+        Returns
+        -------
+        output : pd.DataFrame
+    
+        """
         output = df.copy()
         encoded_features = fitted_encoder.get_feature_names(features)
 
@@ -193,24 +353,3 @@ class Data():
 
         return output
     
-    
-
-    
-
-    def fit_model(self, X, y, test_size=0.33):
-        self.test_size = test_size
-
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
-        clf = RandomForestClassifier(max_depth=None, random_state=0)
-        self.model = clf.fit(X_train, y_train)
-        
-        pred_train = self.model.predict(X_train)
-        pred_test = self.model.predict(X_test)
-
-        fpr, tpr, _ = metrics.roc_curve(y_train, pred_train, pos_label=1)
-        self.train_auc = metrics.auc(fpr, tpr)
-
-        fpr, tpr, _ = metrics.roc_curve(y_test, pred_test, pos_label=1)
-        self.test_auc = metrics.auc(fpr, tpr)
-
-        self.model_prediction = clf.predict(X)

@@ -1,5 +1,3 @@
-from sklearn.neighbors import NearestNeighbors
-
 from carla.data.catalog import CsvCatalog
 from carla.models.catalog import MLModelCatalog
 from carla.models.negative_instances import predict_negative_instances
@@ -8,7 +6,6 @@ import torch
 import time
 import os
 import argparse
-import numpy as np
 import pandas as pd
 
 from mcce.mcce import MCCE
@@ -20,7 +17,7 @@ parser.add_argument(
     "-p",
     "--path",
     type=str,
-    default="Final_results_new",
+    required=True,
     help="Path where results are saved",
 )
 parser.add_argument(
@@ -31,8 +28,8 @@ parser.add_argument(
     help="Number of test observations to generate counterfactuals for.",
 )
 parser.add_argument(
-    "-K",
-    "--K",
+    "-k",
+    "--k",
     type=int,
     default=10000,
     help="Number of observations to sample from each end node for MCCE method.",
@@ -47,7 +44,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 n_test = args.number_of_samples
-K = args.K
+k = args.k
 force_train = args.force_train
 path = args.path
 seed = 1
@@ -88,14 +85,14 @@ for feature in ["workclass", "marital-status", "occupation", "relationship", \
     df[feature] = [mapping[item] for item in df[feature]]
 
 # Save processed data in the same folder
-df.to_csv("Data/train_not_normalized_data_from_carla.csv", index=False)
+df.to_csv("Data/adult_data.csv", index=False)
 
 print("Read in processed data using CARLA")
 continuous = ["age", "fnlwgt", "education-num", "capital-gain", "hours-per-week", "capital-loss"]
 categorical = ["marital-status", "native-country", "occupation", "race", "relationship", "sex", "workclass"]
 immutable = ["age", "sex"]
 
-dataset = CsvCatalog(file_path="Data/train_not_normalized_data_from_carla.csv",
+dataset = CsvCatalog(file_path="Data/adult_data.csv",
                      continuous=continuous,
                      categorical=categorical,
                      immutables=immutable,
@@ -137,20 +134,17 @@ df = (dataset.df).astype(dtypes)
 print("Fit trees")
 start = time.time()
 mcce = MCCE(dataset=dataset,
-            fixed_features=fixed_features,
-            fixed_features_encoded=fixed_features_encoded,
-            model=ml_model, 
-            seed=1)
+            model=ml_model)
 
 mcce.fit(df.drop(dataset.target, axis=1), dtypes)
 time_fit = time.time()
 
 print("Sample observations from tree nodes")
-synth_df = mcce.generate(test_factual.drop(dataset.target, axis=1), k=K)
+cfs = mcce.generate(test_factual.drop(dataset.target, axis=1), k=k)
 time_generate = time.time()
 
 print("Process sampled observations")
-mcce.postprocess(cfs=synth_df, fact=test_factual, cutoff=0.5, higher_cardinality=True)
+mcce.postprocess(cfs, test_factual, cutoff=0.5, higher_cardinality=True)
 time_postprocess = time.time()
 
 print("Save results")
@@ -167,4 +161,4 @@ results[y_col] = test_factual[y_col]
 cols = ['data', 'method'] + cat_feat_encoded.tolist() + cont_feat + [y_col] + ['time (seconds)']
 results.sort_index(inplace=True)
 
-results[cols].to_csv(os.path.join(path, f"adult_mcce_results_higher_cardinality_k_{K}_n_{n_test}.csv"))
+results[cols].to_csv(os.path.join(path, f"adult_mcce_results_higher_cardinality_k_{k}_n_{n_test}.csv"))

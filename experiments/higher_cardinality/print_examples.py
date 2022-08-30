@@ -19,7 +19,7 @@ parser.add_argument(
     "-p",
     "--path",
     type=str,
-    default="Final_results_new",
+    required=True,
     help="Path where results are saved",
 )
 parser.add_argument(
@@ -30,17 +30,11 @@ parser.add_argument(
     help="Number of test observations to generate counterfactuals for.",
 )
 parser.add_argument(
-    "-K",
-    "--K",
+    "-k",
+    "--k",
     type=int,
     default=10000,
     help="Number of observations to sample from each end node for MCCE method.",
-)
-parser.add_argument(
-    "-ft",
-    "--force_train",
-    action='store_true',  # default is False
-    help="Whether to train the prediction model from scratch or not. Default will not train.",
 )
 parser.add_argument(
     "-ft",
@@ -53,9 +47,8 @@ parser.add_argument(
 args = parser.parse_args()
 
 path = args.path
-data_name = args.dataset
 n_test = args.number_of_samples
-K = args.K
+k = args.k
 force_train = args.force_train
 
 print("Read in processed data using CARLA functionality")
@@ -102,7 +95,7 @@ test_factual = factuals.iloc[:100]
 
 print(f"Printing examples")
 
-cfs = pd.read_csv(os.path.join(path, f"adult_mcce_results_higher_cardinality_k_{K}_n_{n_test}.csv"), index_col=0)
+cfs = pd.read_csv(os.path.join(path, f"adult_mcce_results_higher_cardinality_k_{k}_n_{n_test}.csv"), index_col=0)
 
 df_cfs = cfs.drop(['method', 'data'], axis=1)
 df_cfs.sort_index(inplace=True)
@@ -121,7 +114,6 @@ cols = ['method', 'age', 'fnlwgt', 'education-num', 'capital-gain', 'capital-los
 
 to_write = temp[cols].loc[[1, 31]].sort_index() # , 122, 124
 to_write.columns = cols
-# to_write.sort_values(['Method'], inplace=True, ascending=False)
 
 for feature in ["workclass", "marital-status", "occupation", "relationship", "sex", "race", "native-country"]:
     d = df.groupby([feature]).size().sort_values(ascending=False)
@@ -163,4 +155,4 @@ feature = 'workclass'
 dct = {'Self-emp-not-inc': 'SENI', 'Private': 'P', 'Never-worked': 'NW'}
 to_write[feature] = [dct[item] for item in to_write[feature]]
 
-print(to_write.to_string())
+print(to_write.round(0).to_string())

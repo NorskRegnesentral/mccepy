@@ -8,6 +8,32 @@ NUM_COLS_DTYPES = ['int', 'float', 'datetime', 'float64']
 CAT_COLS_DTYPES = ['category', 'bool']
 
 class CARTMethod(Method):
+    """
+    Implementation of CART method from Breiman et.al. 1984 [1]_.
+    Entirely based on https://github.com/hazy/synthpop. 
+    
+    Parameters
+    ----------
+    dtype : dict
+        Dictionary containing the data types of each feature.
+    minibucket : float
+       The minimum number of samples required to be in a leaf node. A split point at any depth will only be considered if its leaves have 
+       at least this number of training samples in each of the left and right branches.
+    random_state : bool, default: False
+       Whether a random state should be set before the trees are fit.
+
+    Methods
+    -------
+    fit :
+        Fit the classification and regression tree.
+    predict : 
+        Find the end node of each observation 
+    
+    Returns
+    -------
+
+    .. [1] Leo Breiman, Jerome Friedman, Richard Olshen, and Charles Stone. 1984. Classification and regression trees. Chapman and Hall.
+    """
     def __init__(self, dtype, minibucket=5, random_state=None, *args, **kwargs):
         self.dtype = dtype
         self.minibucket = minibucket
@@ -19,7 +45,17 @@ class CARTMethod(Method):
             self.cart = DecisionTreeRegressor(min_samples_leaf=self.minibucket, random_state=self.random_state)
 
     def fit(self, X_df, y_df):
-        
+        """
+        Fit CART based on the data type of y_df
+        Parameters
+        ----------
+        X_df : pd.DataFrame
+            DataFrame containing all training observations. 
+        y_df : pd.DataFrame
+            DataFrame containing response/target
+        Returns
+        -------
+        """
         X_df, y_df = self.prepare_dfs(X_df=X_df, y_df=y_df, normalise_num_cols=False, one_hot_cat_cols=True)
         if self.dtype in NUM_COLS_DTYPES:
             self.y_real_min, self.y_real_max = np.min(y_df), np.max(y_df)
@@ -34,6 +70,16 @@ class CARTMethod(Method):
         self.leaves_y_dict = leaves_y_df.groupby('leaves').apply(lambda x: x.to_numpy()[:, -1]).to_dict()
 
     def predict(self, X_test_df):
+        """
+        Find end node of the tree for each observation in X_test_df
+        Parameters
+        ----------
+        X_test_df : pd.DataFrame
+            DataFrame containing all test observations. 
+        
+        Returns
+        -------
+        """
         X_test_df, _ = self.prepare_dfs(X_df=X_test_df, normalise_num_cols=False, one_hot_cat_cols=True, fit=False)
 
         # predict the leaves and for each leaf randomly sample from the observed values
@@ -43,9 +89,11 @@ class CARTMethod(Method):
 
         leaves_pred_index_df = pd.DataFrame({'leaves_pred': leaves_pred, 'index': range(len(leaves_pred))})
         leaves_pred_index_dict = leaves_pred_index_df.groupby('leaves_pred').apply(lambda x: x.to_numpy()[:, -1]).to_dict()
-        # print(leaves_pred_index_dict.items())
+        
         for leaf, indices in leaves_pred_index_dict.items():
-            np.random.seed(0)
+            np.random.seed(0) # seed seed so we can reproduce MCCE results
             y_pred[indices] = np.random.choice(self.leaves_y_dict[leaf], size=len(indices), replace=True)
 
         return y_pred
+    
+    

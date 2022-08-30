@@ -14,7 +14,7 @@ parser.add_argument(
     "-p",
     "--path",
     type=str,
-    default="Final_results_new",
+    required=True,
     help="Path where results are saved",
 )
 parser.add_argument(
@@ -32,8 +32,8 @@ parser.add_argument(
     help="Number of test observations to generate counterfactuals for.",
 )
 parser.add_argument(
-    "-K",
-    "--K",
+    "-k",
+    "--k",
     type=int,
     default=10000,
     help="Number of observations to sample from each end node for MCCE method.",
@@ -47,7 +47,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 n_test = args.number_of_samples
-K = args.K # 1000 for Compas
+k = args.k # 1000 for Compas
 data_name = args.dataset
 force_train = args.force_train
 path = args.path
@@ -99,16 +99,6 @@ cont_feat = dataset.continuous
 cat_feat = dataset.categorical
 cat_feat_encoded = dataset.encoder.get_feature_names(dataset.categorical)
 
-if data_name == 'adult':
-    fixed_features = ['age', 'sex']
-    fixed_features_encoded = ['age', 'sex_Male']
-elif data_name == 'give_me_some_credit':
-    fixed_features = ['age']
-    fixed_features_encoded = ['age']
-elif data_name == 'compas':
-    fixed_features = ['age', 'sex', 'race']
-    fixed_features_encoded = ['age', 'sex_Male', 'race_Other']
-
 #  Create dtypes for MCCE()
 dtypes = dict([(x, "float") for x in cont_feat])
 for x in cat_feat_encoded:
@@ -118,20 +108,17 @@ df = (dataset.df).astype(dtypes)
 print("Fit trees")
 start = time.time()
 mcce = MCCE(dataset=dataset,
-            fixed_features=fixed_features,
-            fixed_features_encoded=fixed_features_encoded,
-            model=ml_model, 
-            seed=1)
+            model=ml_model)
 
 mcce.fit(df.drop(dataset.target, axis=1), dtypes)
 time_fit = time.time()
 
 print("Sample observations from tree nodes")
-synth_df = mcce.generate(test_factual.drop(y_col, axis=1), k=K)
+cfs = mcce.generate(test_factual.drop(y_col, axis=1), k=k)
 time_generate = time.time()
 
 print("Process sampled observations")
-mcce.postprocess(cfs=synth_df, fact=test_factual, cutoff=0.5)
+mcce.postprocess(cfs, test_factual, cutoff=0.5, higher_cardinality=False)
 time_postprocess = time.time()
 
 print("Calculate timing")
@@ -149,7 +136,7 @@ results[y_col] = test_factual[y_col]
 cols = ['data', 'method'] + cat_feat_encoded.tolist() + cont_feat + [y_col] + ['time (seconds)']
 results.sort_index(inplace=True)
 
-results[cols].to_csv(os.path.join(path, f"{data_name}_mcce_results_k_{K}_n_{n_test}.csv"))
+results[cols].to_csv(os.path.join(path, f"{data_name}_mcce_results_k_{k}_n_{n_test}.csv"))
 
 
 

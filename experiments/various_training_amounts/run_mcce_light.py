@@ -25,7 +25,7 @@ parser.add_argument(
     "-p",
     "--path",
     type=str,
-    default="Final_results_new",
+    required=True,
     help="Path where results are saved",
 )
 parser.add_argument(
@@ -43,8 +43,8 @@ parser.add_argument(
     help="Number of test observations to generate counterfactuals for.",
 )
 parser.add_argument(
-    "-K",
-    "--K",
+    "-k",
+    "--k",
     type=int,
     default=10000,
     help="Number of observations to sample from each end node for MCCE method.",
@@ -66,7 +66,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 n_test = args.number_of_samples
-K = args.K
+k = args.k
 data_name = args.dataset
 force_train = args.force_train
 num_seeds = args.s
@@ -119,16 +119,6 @@ cont_feat = dataset.continuous
 cat_feat = dataset.categorical
 cat_feat_encoded = dataset.encoder.get_feature_names(dataset.categorical)
 
-if data_name == 'adult': 
-    fixed_features_encoded = ['age', 'sex_Male']
-    fixed_features = ['age', 'sex']
-elif data_name == 'give_me_some_credit':
-    fixed_features_encoded = ['age']
-    fixed_features = ['age']
-elif data_name == 'compas':
-    fixed_features_encoded = ['age', 'sex_Male', 'race_Other']
-    fixed_features = ['age', 'sex', 'race']
-
 #  Create dtypes for MCCE()
 dtypes = dict([(x, "float") for x in cont_feat])
 for x in cat_feat_encoded:
@@ -148,11 +138,7 @@ elif data_name == 'compas':
 
 # Fit "MCCE-light" method
 all_results = pd.DataFrame()
-mcce = MCCE(dataset=dataset,
-            fixed_features=fixed_features,
-            fixed_features_encoded=fixed_features_encoded,
-            model=ml_model, 
-            seed=1)
+mcce = MCCE(dataset=dataset, model=ml_model)
 
 for n in n_list:
     print(f"Number of rows: {n}.")
@@ -177,14 +163,14 @@ for n in n_list:
         test_factual_inverse = dataset.inverse_transform(test_factual)
         test_factual_inverse.index.name = 'test'
         
-        synth = pd.merge(test_factual_inverse.reset_index()[dataset.immutables + ['test']], 
+        cfs = pd.merge(test_factual_inverse.reset_index()[dataset.immutables + ['test']], 
                          positives, 
                          on=dataset.immutables).set_index(['test'])
-        synth = dataset.transform(synth) # Go from normal to one-hot encoded
+        cfs = dataset.transform(cfs) # Go from normal to one-hot encoded
         generate_samples = time.time()
 
         print("Process sampled observations")
-        mcce.postprocess(cfs=synth, fact=test_factual, cutoff=0.5)
+        mcce.postprocess(cfs, test_factual, cutoff=0.5)
         time_postprocess = time.time()
 
         mcce.results_sparse['time (seconds)'] = time_postprocess - start
@@ -224,8 +210,7 @@ for n in n_list:
             df_decoded_cfs = dataset.inverse_transform(counterfactuals_without_nans)
             df_factuals = dataset.inverse_transform(factual_without_nans)
             
-            total_violations = constraint_violation(df_decoded_cfs, df_factuals, \
-                dataset.continuous, dataset.categorical, dataset.immutables)
+            total_violations = constraint_violation(df_decoded_cfs, df_factuals, dataset)
             for x in total_violations:
                 violations.append(x[0])
             results['violation'] = violations
@@ -240,4 +225,4 @@ for n in n_list:
 
 cols = ['data', 'method', 'n', 'seed', 'L0', 'L1', 'L2', 'feasibility', 'violation', 'success', 'time (seconds)'] + cat_feat + cont_feat + [y_col]
 
-all_results[cols].to_csv(os.path.join(path, f"{data_name}_mcce_results_light_k_{K}_n_{n_test}.csv"))
+all_results[cols].to_csv(os.path.join(path, f"{data_name}_mcce_results_light_k_{k}_n_{n_test}.csv"))

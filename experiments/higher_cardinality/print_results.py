@@ -20,7 +20,7 @@ parser.add_argument(
     "-p",
     "--path",
     type=str,
-    default="Final_results_new",
+    required=True,
     help="Path where results are saved",
 )
 parser.add_argument(
@@ -31,8 +31,8 @@ parser.add_argument(
     help="Number of test observations to generate counterfactuals for.",
 )
 parser.add_argument(
-    "-K",
-    "--K",
+    "-k",
+    "--k",
     type=int,
     default=10000,
     help="Number of observations to sample from each end node for MCCE method.",
@@ -48,9 +48,8 @@ parser.add_argument(
 args = parser.parse_args()
 
 path = args.path
-data_name = args.dataset
 n_test = args.number_of_samples
-K = args.K
+k = args.k
 force_train = args.force_train
 
 print("Read in processed data using CARLA functionality")
@@ -91,9 +90,9 @@ test_factual = factuals.iloc[:n_test]
 
 print(f"Calculating results")
 
-cfs = pd.read_csv(os.path.join(path, f"adult_mcce_results_higher_cardinality_k_{K}_n_{n_test}.csv"), index_col=0)
+cfs = pd.read_csv(os.path.join(path, f"adult_mcce_results_higher_cardinality_k_{k}_n_{n_test}.csv"), index_col=0)
 
-df_cfs = cfs.drop(['method',	'data'], axis=1)
+df_cfs = cfs.drop(['method', 'data'], axis=1)
 df_cfs.sort_index(inplace=True)
 
 # remove missing values
@@ -110,37 +109,36 @@ counterfactuals_without_nans = output_counterfactuals.drop(index=nan_idx)
 if len(counterfactuals_without_nans) > 0:
     results = dataset.inverse_transform(counterfactuals_without_nans[factuals.columns])
     results['method'] = 'mcce'
-    results['data'] = data_name
+    results['data'] = 'adult'
     
-    # distance
+    # calculate distances
     distances = pd.DataFrame(distance(counterfactuals_without_nans, factual_without_nans, dataset, higher_card=True))
     distances.set_index(non_nan_idx, inplace=True)
     results = pd.concat([results, distances], axis=1)
 
-    results['feasibility'] = feasibility(counterfactuals_without_nans, factual_without_nans, \
-        dataset.df.columns)
+    # calculate feasibility
+    results['feasibility'] = feasibility(counterfactuals_without_nans, factual_without_nans, dataset.df.columns)
     
-    # violation
+    # calculate violation
     violations = []
     df_decoded_cfs = dataset.inverse_transform(counterfactuals_without_nans)
     df_factuals = dataset.inverse_transform(factual_without_nans)
     
-    total_violations = constraint_violation(df_decoded_cfs, df_factuals, \
-        dataset.continuous, dataset.categorical, dataset.immutables)
+    # calculate violations
+    total_violations = constraint_violation(df_decoded_cfs, df_factuals, dataset)
     for x in total_violations:
         violations.append(x[0])
     results['violation'] = violations
     
-    # success
+    # calculate success
     results['success'] = success_rate(counterfactuals_without_nans, ml_model, cutoff=0.5)
 
-    # time
+    # calculate time
     results['time (seconds)'] = df_cfs['time (seconds)'].mean() 
 
 
-print("Concat all results")
 cols = ['method', 'L0', 'L2', 'feasibility', 'success', 'violation', 'time (seconds)']
-temp = results[cols]  # pd.concat([all_results[cols], results[cols]], axis=0)
+temp = results[cols]
 
 print("Writing results")
 to_write = temp[['method', 'L0', 'L2', 'feasibility', 'violation', 'success', 'time (seconds)']].groupby(['method']).mean()
@@ -150,9 +148,8 @@ to_write_sd = temp[['method', 'L0', 'L2', 'feasibility', 'violation', 'success']
 to_write_sd.reset_index(inplace=True)
 to_write_sd.rename(columns={'L0': 'L0_sd', 'L2': 'L2_sd', 'feasibility': 'feasibility_sd', 'violation': 'violation_sd', 'success': 'success_sd'}, inplace=True)
 
-
 CE_N = temp.groupby(['method']).size().reset_index().rename(columns={0: 'CE_N'})
 to_write = pd.concat([to_write, to_write_sd[['L0_sd', 'L2_sd', 'feasibility_sd', 'violation_sd', 'success_sd']], CE_N.CE_N], axis=1)
 to_write = to_write[['method', 'L0', 'L0_sd', 'L2', 'L2_sd', 'feasibility', 'feasibility_sd', 'violation', 'violation_sd', 'success', 'CE_N', 'time (seconds)']]
 
-print(to_write.to_string())
+print(to_write.round(2).to_string())

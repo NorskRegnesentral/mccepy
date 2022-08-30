@@ -19,6 +19,7 @@ parser = argparse.ArgumentParser(description="Fit MCCE with various datasets.")
 parser.add_argument(
     "-p",
     "--path",
+    type=str,
     required=True,
     help="Path where results are saved",
 )
@@ -38,8 +39,8 @@ parser.add_argument(
     help="Number of instances per dataset",
 )
 parser.add_argument(
-    "-K",
-    "--K",
+    "-k",
+    "--k",
     type=int,
     default=10000,
     help="Number generated counterfactuals per test observation",
@@ -56,7 +57,7 @@ args = parser.parse_args()
 path = args.path
 data_name = args.dataset
 n_test = args.number_of_samples
-K = args.K
+k = args.k
 force_train = args.force_train
 
 print(f"Load {data_name} data set")
@@ -110,7 +111,7 @@ for method in ['cchvae', 'cem-vae', 'revise', 'clue', 'crud', 'face', 'mcce']:
     print(f"Calculating results for {method}")
 
     if method == 'mcce':
-        cfs = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_k_{K}_n_{n_test}.csv"), index_col=0)
+        cfs = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_k_{k}_n_{n_test}.csv"), index_col=0)
     else:    
         cfs = pd.read_csv(os.path.join(path, f"{data_name}_manifold_results.csv"), index_col=0)
     
@@ -138,16 +139,14 @@ for method in ['cchvae', 'cem-vae', 'revise', 'clue', 'crud', 'face', 'mcce']:
         distances.set_index(non_nan_idx, inplace=True)
         results = pd.concat([results, distances], axis=1)
 
-        results['feasibility'] = feasibility(counterfactuals_without_nans, factual_without_nans, \
-            dataset.df.columns)
+        results['feasibility'] = feasibility(counterfactuals_without_nans, factual_without_nans, dataset.df.columns)
         
         # violation
         violations = []
         df_decoded_cfs = dataset.inverse_transform(counterfactuals_without_nans)
         df_factuals = dataset.inverse_transform(factual_without_nans)
         
-        total_violations = constraint_violation(df_decoded_cfs, df_factuals, \
-            dataset.continuous, dataset.categorical, dataset.immutables)
+        total_violations = constraint_violation(df_decoded_cfs, df_factuals, dataset)
         for x in total_violations:
             violations.append(x[0])
         results['violation'] = violations
@@ -172,7 +171,7 @@ for method in ['cchvae', 'cem-vae', 'revise', 'clue', 'crud', 'face', 'mcce']:
 
 print("Concat all results")
 cols = ['method', 'L0', 'L2', 'feasibility', 'success', 'violation', 'time (seconds)']
-temp = all_results[cols]  # pd.concat([all_results[cols], results[cols]], axis=0)
+temp = all_results[cols]
 
 print(f"Writing results for {data_name}")
 to_write = temp[['method', 'L0', 'L2', 'feasibility', 'violation', 'success', 'time (seconds)']].groupby(['method']).mean()
@@ -187,4 +186,4 @@ CE_N = temp.groupby(['method']).size().reset_index().rename(columns={0: 'CE_N'})
 to_write = pd.concat([to_write, to_write_sd[['L0_sd', 'L2_sd', 'feasibility_sd', 'violation_sd', 'success_sd']], CE_N.CE_N], axis=1)
 to_write = to_write[['method', 'L0', 'L0_sd', 'L2', 'L2_sd', 'feasibility', 'feasibility_sd', 'violation', 'violation_sd', 'success', 'CE_N', 'time (seconds)']]
 
-print(to_write.to_string())
+print(to_write.round(2).to_string())

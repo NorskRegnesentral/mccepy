@@ -10,15 +10,31 @@ torch.manual_seed(0)
 import pandas as pd
 pd.set_option('display.max_columns', None)
 from sklearn.ensemble import RandomForestClassifier
-from sklearn import metrics
 
 from carla.data.catalog import OnlineCatalog
 from carla.models.negative_instances import predict_negative_instances
 from carla import MLModel
 
 class RandomForestModel(MLModel):
-    """The default way of implementing RandomForest from sklearn
-    https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html"""
+    """
+    Trains a random forest model using the sklearn RandomForestClassifier method. 
+    Takes as input the CARLA MLModel class. 
+    
+    Parameters
+    ----------
+    data : mcce.Data
+        Object of class mcce.Data which contains the data to train the model on and a set
+        of other attributions like which features are continuous, categorical, and fixed.
+    
+    Methods
+    -------
+    predict : 
+        Predicts the response/target for a data set based on the fitted random forest.
+    predict_proba :
+        Outputs the predicted probability (between 0 and 1) for a data set based on the fitted random forest.
+    get_ordered_features :
+        Returns a pd.DataFrame where the features have the same ordering as the original data set. 
+    """
 
     def __init__(self, data):
         super().__init__(data)
@@ -75,12 +91,13 @@ class RandomForestModel(MLModel):
     def predict_proba(self, x):
         return self._mymodel.predict_proba(self.get_ordered_features(x))
 
-parser = argparse.ArgumentParser(description="Print counterfactual examples generated when predictive model is a decision tree.")
+parser = argparse.ArgumentParser(description="Print counterfactual examples generated when \
+                                              predictive model is a decision tree.")
 parser.add_argument(
     "-p",
     "--path",
     type=str,
-    default="Final_results_new",
+    required=True,
     help="Path where results are saved",
 )
 parser.add_argument(
@@ -98,8 +115,8 @@ parser.add_argument(
     help="Number of test observations to generate counterfactuals for.",
 )
 parser.add_argument(
-    "-K",
-    "--K",
+    "-k",
+    "--k",
     type=int,
     default=10000,
     help="Number of observations to sample from each end node for MCCE method.",
@@ -110,7 +127,7 @@ args = parser.parse_args()
 path = args.path
 data_name = args.dataset
 n_test = args.number_of_samples
-K = args.K
+k = args.k
 
 dataset = OnlineCatalog(data_name)
 
@@ -121,7 +138,7 @@ test_factual = factuals.iloc[:n_test]
 
 test_factual = dataset.inverse_transform(test_factual[factuals.columns])
 
-df_cfs = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_tree_model_k_{K}_n_{n_test}.csv"), index_col=0)
+df_cfs = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_tree_model_k_{k}_n_{n_test}.csv"), index_col=0)
 df_cfs.sort_index(inplace=True)
     
 # remove missing values
@@ -139,13 +156,6 @@ factual_without_nans = factual_without_nans.loc[counterfactuals_without_nans.ind
 factual_without_nans['method'] = 'original'
 factual_without_nans['data'] = data_name
 
-# results_inverse = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_tree_model_k_{K}_n_{n_test}_inverse_transform.csv"), index_col=0)
-# true_raw = pd.read_csv(os.path.join(path, f"{data_name}_tree_model_n_{n_test}_inverse_transform.csv"), index_col=0)
-# true_raw['method'] = 'Original'
-
-# results_inverse['method'] = 'MCCE'
-# temp = pd.concat([results_inverse, true_raw], axis=0)
-
 # counterfactuals
 if len(counterfactuals_without_nans) > 0:
     results = dataset.inverse_transform(counterfactuals_without_nans[factuals.columns])
@@ -156,7 +166,6 @@ if len(counterfactuals_without_nans) > 0:
 
 if data_name == 'adult':
     to_write = results.loc[[1, 31]].sort_index() # , 122, 124
-    # to_write.columns = cols
 
     feature = 'marital-status'
     dct = {'Married': 'M', 'Non-Married': 'NM'}
@@ -189,25 +198,24 @@ if data_name == 'adult':
     cols = ['method', 'age', 'fnlwgt', 'education-num', 'capital-gain', 'capital-loss', 'hours-per-week', 'marital-status', 'native-country', 'occupation', 'race', 'relationship', 'sex', 'workclass']
 
 elif data_name == 'give_me_some_credit':
-    cols = ['method', 'age', 'RevolvingUtilizationOfUnsecuredLines', \
-    'NumberOfTime30-59DaysPastDueNotWorse', 'DebtRatio', 'MonthlyIncome', \
-    'NumberOfOpenCreditLinesAndLoans', 'NumberOfTimes90DaysLate', \
-    'NumberRealEstateLoansOrLines', 'NumberOfTime60-89DaysPastDueNotWorse', \
-    'NumberOfDependents']
+    cols = ['method', 'age', 'RevolvingUtilizationOfUnsecuredLines', 
+            'NumberOfTime30-59DaysPastDueNotWorse', 'DebtRatio', 'MonthlyIncome', 
+            'NumberOfOpenCreditLinesAndLoans', 'NumberOfTimes90DaysLate', 
+            'NumberRealEstateLoansOrLines', 'NumberOfTime60-89DaysPastDueNotWorse', 
+            'NumberOfDependents']
 
     to_write = results[cols].loc[[287, 512]].sort_index() # , 1013, 1612
 
-    cols = ['method', 'Age', 'Unsec. Lines', \
-    '30 Days Past', 'Debt Ratio', 'Month Inc', \
-    'Credit Lines', '90 Days Late', \
-    'Real Est. Loans', '60 Days Past', \
-    'Nb Dep.']
+    cols = ['method', 'Age', 'Unsec. Lines', 
+            '30 Days Past', 'Debt Ratio', 'Month Inc', 
+            'Credit Lines', '90 Days Late', 
+            'Real Est. Loans', '60 Days Past', 'Nb Dep.']
 
     to_write.columns = cols
 
 elif data_name == 'compas':
-    cols = ['method', 'age', 'two_year_recid', 'priors_count', 'length_of_stay',
-    'c_charge_degree', 'race', 'sex']
+    cols = ['method', 'age', 'two_year_recid', 'priors_count', 'length_of_stay', 
+            'c_charge_degree', 'race', 'sex']
 
     to_write = results[cols].loc[[67, 286]].sort_index()
 

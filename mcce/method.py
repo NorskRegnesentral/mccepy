@@ -7,6 +7,33 @@ CAT_COLS_DTYPES = ['category', 'bool']
 
 
 class Method(ABC):
+    """
+    Entirely based on https://github.com/hazy/synthpop. 
+
+    Generic framework for preparing training data. 
+    
+    The idea is that you define this generic class and any class you create that 
+    is passed Method will have the defined functions below (e.g., prepare_dfs). 
+    Currently only CARTMethod and SampleMethod use Method class. 
+
+
+    Parameters
+    ----------
+    
+    Methods
+    ----------
+    prepare_dfs :
+        Normalizes the continuous features if normalise_num_cols=True 
+        and encodes the categorical features if one_hot_cat_cols=True.
+        If fit=True, will also fit the normalizer/encoder. If False, will use the previous fit 
+        objects.
+
+    Returns
+    -------
+        X_df: pd.DataFrame
+        y_df: pd.DataFrame
+    
+    """
     @abstractmethod
     def fit(self):
         pass

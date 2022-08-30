@@ -20,8 +20,25 @@ from mcce.metrics import distance, constraint_violation, feasibility, success_ra
 
 # Fit predictive model that takes into account MLModel (a CARLA class!)
 class RandomForestModel(MLModel):
-    """The default way of implementing RandomForest from sklearn
-    https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html"""
+    """
+    Trains a random forest model using the sklearn RandomForestClassifier method. 
+    Takes as input the CARLA MLModel class. 
+    
+    Parameters
+    ----------
+    data : mcce.Data
+        Object of class mcce.Data which contains the data to train the model on and a set
+        of other attributions like which features are continuous, categorical, and fixed.
+    
+    Methods
+    -------
+    predict : 
+        Predicts the response/target for a data set based on the fitted random forest.
+    predict_proba :
+        Outputs the predicted probability (between 0 and 1) for a data set based on the fitted random forest.
+    get_ordered_features :
+        Returns a pd.DataFrame where the features have the same ordering as the original data set. 
+    """
 
     def __init__(self, data):
         super().__init__(data)
@@ -77,12 +94,13 @@ class RandomForestModel(MLModel):
     def predict_proba(self, x):
         return self._mymodel.predict_proba(self.get_ordered_features(x))
 
-parser = argparse.ArgumentParser(description="Print MCCE metric results when predictive model is a decision tree.")
+parser = argparse.ArgumentParser(description="Print MCCE metric results when predictive model is \
+                                              a decision tree.")
 parser.add_argument(
     "-p",
     "--path",
     type=str,
-    default="Final_results_new",
+    required=True,
     help="Path where results are saved",
 )
 parser.add_argument(
@@ -100,8 +118,8 @@ parser.add_argument(
     help="Number of test observations to generate counterfactuals for.",
 )
 parser.add_argument(
-    "-K",
-    "--K",
+    "-k",
+    "--k",
     type=int,
     default=10000,
     help="Number of observations to sample from each end node for MCCE method.",
@@ -112,7 +130,7 @@ args = parser.parse_args()
 path = args.path
 data_name = args.dataset
 n_test = args.number_of_samples
-K = args.K
+k = args.k
 
 # Load data set from CARLA
 dataset = OnlineCatalog(data_name)
@@ -124,7 +142,9 @@ factuals = predict_negative_instances(ml_model, dataset.df)
 test_factual = factuals.iloc[:n_test]
 
 # Read results
-df_cfs = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_tree_model_k_{K}_n_{n_test}.csv"), index_col=0)
+df_cfs = pd.read_csv(os.path.join(path, 
+                                  f"{data_name}_mcce_results_tree_model_k_{k}_n_{n_test}.csv"), 
+                    index_col=0)
 df_cfs.sort_index(inplace=True)
     
 # Remove missing values
@@ -159,8 +179,7 @@ if len(counterfactuals_without_nans) > 0:
     df_decoded_cfs = dataset.inverse_transform(counterfactuals_without_nans)
     df_factuals = dataset.inverse_transform(factual_without_nans)
     
-    total_violations = constraint_violation(df_decoded_cfs, df_factuals, \
-        dataset.continuous, dataset.categorical, dataset.immutables)
+    total_violations = constraint_violation(df_decoded_cfs, df_factuals, dataset)
     for x in total_violations:
         violations.append(x[0])
     results['violation'] = violations
@@ -187,4 +206,4 @@ CE_N = temp.groupby(['method']).size().reset_index().rename(columns={0: 'CE_N'})
 to_write = pd.concat([to_write, to_write_sd[['L0_sd', 'L2_sd', 'feasibility_sd', 'violation_sd', 'success_sd']], CE_N.CE_N], axis=1)
 to_write = to_write[['method', 'L0', 'L0_sd', 'L2', 'L2_sd', 'feasibility', 'feasibility_sd', 'violation', 'violation_sd', 'success', 'CE_N', 'time (seconds)']]
 
-print(to_write.to_string())
+print(to_write.round(2).to_string())

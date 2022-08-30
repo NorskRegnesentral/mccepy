@@ -1,29 +1,66 @@
+import re
+import sys
 import time
 import numpy as np
 import pandas as pd
 
 from .cart import CARTMethod
 from .sample import SampleMethod
-
 from .metrics import distance
 
 METHODS_MAP = {'cart': CARTMethod, 'sample': SampleMethod}
 
 class MCCE:
+    """
+    MCCE class that is used to fit the decision trees, sample from the end nodes, and preprocess the samples to output desired counterfactuals.
+    
+    Parameters
+    ----------
+    dataset : mcce.Data
+        Object that stores the data as a pd.DataFrame and attributes about the data.
+    model : 
+         Object with a predict() function used in the postprocess step of MCCE.
+    seed : int
+
+    Methods
+    -------
+    fit :
+        Fit the decision trees iteratively, starting with only the fixed features.
+    generate : 
+        Samples observations from the leaf nodes of the fitted decision trees based on a set of feature values.
+    postprocess :
+        Removes the samples that would not serve as good counterfactual explanations. 
+    calculate_metrics :
+        Calculates the distance metrics between the potential counterfactuals and the original factual observations.
+    
+    
+    """
     def __init__(self,
-                 dataset=None,
-                 fixed_features=None,
-                 fixed_features_encoded=None,
-                 model=None,
-                 seed=None
+                 dataset,
+                 model,
+                 seed=1
                  ):
 
-        # initialize arguments
         self.dataset = dataset
-        self.fixed_features = fixed_features  # features to condition on - the ones in the dataset
-        self.fixed_features_encoded = fixed_features_encoded
         self.continuous = dataset.continuous
         self.categorical = dataset.categorical
+        self.fixed_features = dataset.immutables
+
+        # Get the new categorical feature names after encoding
+        self.categorical_encoded = dataset.encoder.get_feature_names(self.categorical).tolist()
+        
+        # Get the new fixed feature names after encoding
+        fixed_features_encoded = []
+        for fixed in self.fixed_features:
+            if fixed in self.categorical:
+                for new_col in self.categorical_encoded:
+                    match = re.search(fixed, new_col)
+                    if match:
+                        fixed_features_encoded.append(new_col)
+            else:
+                fixed_features_encoded.append(fixed)
+
+        self.fixed_features_encoded = fixed_features_encoded
 
         self.seed = seed
         self.model = model
@@ -31,9 +68,28 @@ class MCCE:
         self.method = None
         self.visit_sequence = None
         self.predictor_matrix = None
+
+        if not hasattr(self.model, "predict"):
+            sys.exit("model does not have predict function.")
         
 
-    def fit(self, df, dtypes=None):
+    def fit(self, 
+            df, 
+            dtypes):
+        """
+        Fit the decision trees iteratively, starting with only the fixed features.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Training data. Does not include response/target feature.
+        dtypes : dict
+            Dictionary containing the data types of each feature in df.  
+
+        Returns
+        -------
+        
+        """
 
         self.df_columns = df.columns.tolist()
         self.n_df_rows, self.n_df_columns = np.shape(df)
@@ -75,7 +131,9 @@ class MCCE:
         # fit
         self._fit(df)
 
-    def _fit(self, df):
+    def _fit(self, 
+             df):
+        
         self.saved_methods = {}
         self.trees = {}
 
@@ -94,13 +152,29 @@ class MCCE:
                 self.trees[col] = col_method.leaves_y_dict
             self.saved_methods[col] = col_method
 
-    def generate(self, test, k):
+    def generate(self, 
+                 test_factual, 
+                 k=10000):
+        """
+        Samples observations from the leaf nodes of the fitted decision trees based on a set of feature values.
 
+        Parameters
+        ----------
+        test_factual : pd.DataFrame
+            DataFrame containing the test observations to generate counterfactuals for.
+        k : int, default: 100
+            The number of observations to sample per leaf node for each test observation. 
+
+        Returns
+        -------
+        pd.DataFrame :
+            Contains k generated counterfactual explanations for each test observation.
+        """
         self.k = k
-        n_test = test.shape[0]
+        n_test = test_factual.shape[0]
 
         # create data set with the fixed features repeated k times
-        synth_df = test[self.fixed_features_encoded]
+        synth_df = test_factual[self.fixed_features_encoded]
         synth_df = pd.concat([synth_df] * self.k)
         synth_df.sort_index(inplace=True)
 
@@ -121,11 +195,35 @@ class MCCE:
         self.total_generating_seconds = time.time() - start_time
 
         # return in same ordering as original dataframe
-        synth_df = synth_df[test.columns]
+        synth_df = synth_df[test_factual.columns]
         return synth_df
 
-    def postprocess(self, cfs, fact, cutoff=0.5, higher_cardinality=False):
+    def postprocess(self, 
+                    cfs, 
+                    test_factual, 
+                    cutoff=0.5, 
+                    higher_cardinality=False):
+        """
+        Postprocess the sampled observations to get exactly one counterfactual explanation per test observation.
+
+        Parameters
+        ----------
+        cfs : pd.DataFrame
+            DataFrame containing the potential counterfactual explanations.
+        test_factual : pd.DataFrame
+            DataFrame containing the test observations to generate counterfactuals for.
+        cutoff : float, default: 0.5
+            Cutoff value that indicates which observations get a positive/desired response and which do not. 
+            Observations with a prediction greater than this cutoff value are considered "positive"
+            and those with a lower prediction are considered "negative".
+        higher_cardinality : bool, default: False
+            Whether the categorical features are allowed to have more than two levels each. 
+        Returns
+        -------
         
+        """
+        
+        cols = cfs.columns
         self.cutoff = cutoff
 
         # Predict response of generated data
@@ -135,7 +233,7 @@ class MCCE:
         n_counterfactuals = cfs_positive.groupby(cfs_positive.index).size()
         n_counterfactuals = pd.DataFrame(n_counterfactuals, columns = ['N'])
 
-        fact_repeated = fact.copy()
+        fact_repeated = test_factual.copy()
 
         fact_repeated = fact_repeated.join(n_counterfactuals)
         fact_repeated.dropna(inplace = True)
@@ -146,7 +244,7 @@ class MCCE:
         self.fact_repeated = fact_repeated
 
         self.results = self.calculate_metrics(cfs=cfs_positive, 
-                                              fact=self.fact_repeated, 
+                                              test_factual=self.fact_repeated, 
                                               higher_cardinality=higher_cardinality) 
 
         # Find the best row for each test obs
@@ -168,10 +266,32 @@ class MCCE:
         
         time2 = time.time()
         self.find_best_cpu_time = time2 - time1
-        self.results_sparse = results_sparse
+        self.results_sparse = results_sparse[cols]
 
 
-    def calculate_metrics(self, cfs, fact, higher_cardinality=False): # inverse_transform
+    def calculate_metrics(self, 
+                          cfs, 
+                          test_factual, 
+                          higher_cardinality):
+        """
+        Calculate the distance between the potential counterfactuals and the original factuals.
+
+        Parameters
+        ----------
+        cfs : pd.DataFrame
+            DataFrame containing the potential counterfactual explanations.
+        test_factual : pd.DataFrame
+            DataFrame containing the test observations to generate counterfactuals for.
+        higher_cardinality : bool, default: False
+            Whether the categorical features are allowed to have more than two levels each. 
+        Returns
+        -------
+            pd.DataFrame containing the three distances:
+            L0: sparsity = the number of features changed 
+            L1: Manhattan distance
+            L2: Euclidean distance
+        
+        """
 
         time1 = time.time()
         features = cfs.columns.to_list()
@@ -179,8 +299,8 @@ class MCCE:
 
         cfs_metrics = cfs.copy()
         
-        # Calculate sparsity and Euclidean distance
-        factual = fact[features]
+        # Calculate sparsity and Euclidean distances
+        factual = test_factual[features]
         counterfactuals = cfs[features]
         
         distances = pd.DataFrame(distance(counterfactuals, factual, self.dataset, higher_cardinality), index=factual.index)

@@ -13,7 +13,7 @@ PATH = 'Final_results_new'
 # must do pip install . in CARLA_version_2 directory
 
 def save_csv(df, data_name):
-    file_name = os.path.join(PATH, f"{data_name}_manifold_results_just_revise3.csv")
+    file_name = os.path.join(PATH, f"{data_name}_carla_results_gpu.csv")
 
     if os.path.exists(file_name):
         df.to_csv(file_name, mode='a', header=False, index=True)

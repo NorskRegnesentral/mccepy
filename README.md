@@ -52,7 +52,7 @@ df = df[features + target]
 
 ```
 
-Scale the continuous features between 0 and 1 and encode the categorical features using one-hot encoding (drop the first level).
+Using ```sklearn```, scale the continuous features between 0 and 1 and encode the categorical features using one-hot encoding (drop the first level).
 
 ```Python
 from sklearn import preprocessing
@@ -188,19 +188,18 @@ test_factual = factuals.iloc[:5]
 ```
 
 
-Use MCCE to generate counterfactual explanations
+Use ```MCCE``` to generate counterfactual explanations
 
 ```Python
 from mcce import MCCE
 
-mcce = MCCE(dataset=dataset,
-            model=ml_model)
+mcce = MCCE(dataset, ml_model)
 
-mcce.fit(df.drop(target, axis=1), dtypes)
+mcce.fit(df.drop(target, axis=1), dtypes) # remove the response from training data set
 
-cfs = mcce.generate(test_factual.drop(target, axis=1), k=100)
+cfs = mcce.generate(test_factual.drop(target, axis=1), k=100) # sample 100 times per node
 
-mcce.postprocess(cfs=cfs, test_factual=test_factual, cutoff=0.5)
+mcce.postprocess(cfs, test_factual, cutoff=0.5) # predicted >= 0.5 is considered positive; < 0.5 is negative
 
 ```
 
@@ -211,7 +210,6 @@ cfs = mcce.results_sparse
 cfs['income'] = test_factual['income']
 
 # invert the features to their original form
-print("Original factuals:")
 decoded_factuals = dataset.inverse_transform(test_factual,
                                              scaler, 
                                              encoder, 
@@ -243,7 +241,6 @@ print(decoded_factuals)
 Print counterfactual explanations values for five test observations
 
 ```Python
-
 decoded_cfs = dataset.inverse_transform(cfs,
                                         scaler, 
                                         encoder, 

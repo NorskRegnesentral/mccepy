@@ -6,6 +6,7 @@ warnings.filterwarnings('ignore')
 import torch
 torch.manual_seed(0)
 
+import numpy as np
 import pandas as pd
 pd.set_option('display.max_columns', 30)
 
@@ -48,13 +49,22 @@ parser.add_argument(
     action='store_true',  # default is False
     help="Whether to train the prediction model from scratch or not. Default will not train.",
 )
-
+parser.add_argument(
+    "-device",
+    "--device",
+    type=str,
+    default='cuda',
+    help="Whether the CARLA methods were trained with a GPU (default) or CPU.",
+)
 args = parser.parse_args()
 
 path = args.path
 data_name = args.dataset
 n_test = args.number_of_samples
 k = args.k
+if data_name == 'compas':
+    k = 1000
+device = args.device
 force_train = args.force_train
 
 print(f"Load {data_name} data set")
@@ -114,19 +124,21 @@ for method in ['cchvae', 'cem-vae', 'revise', 'clue', 'crud', 'face', 'mcce']:
 
     if method == 'mcce':
         try:
-            cfs = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_k_{k}_n_{n_test}.csv"), index_col=0)
+            cfs = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_k_{k}_n_{n_test}_{device}.csv"), index_col=0)
         except:
             print(f"No {method} results saved for k {k} and {n_test} in {path}")
             continue
     else:
         try:
-            cfs = pd.read_csv(os.path.join(path, f"{data_name}_carla_results_n_{n_test}.csv"), index_col=0)
+            cfs = pd.read_csv(os.path.join(path, f"{data_name}_carla_results_n_{n_test}_{device}.csv"), index_col=0)
         except:
             print(f"No {method} results saved for k {k} and {n_test} in {path}")
             continue
     
     df_cfs = cfs[cfs['method'] == method].drop(['method',	'data'], axis=1)
     df_cfs.sort_index(inplace=True)
+    if dataset.target not in df_cfs.columns:
+        df_cfs = df_cfs.join(test_factual[dataset.target])
 
     # remove missing values
     nan_idx = df_cfs.index[df_cfs.isnull().any(axis=1)]
@@ -173,25 +185,31 @@ if data_name == 'adult':
     to_write[feature] = [dct[item] for item in to_write[feature]]
 
     feature = 'sex'
-    dct = {'Male': 'M'}
+    dct = {'Female': 'F', 'Male': 'M'}
     to_write[feature] = [dct[item] for item in to_write[feature]]
 
     feature = 'workclass'
     dct = {'Self-emp-not-inc': 'SENI', 'Private': 'P', 'Non-Private': 'NP'}
     to_write[feature] = [dct[item] for item in to_write[feature]]
 
-    cols = ['method', 'age', 'fnlwgt', 'education-num', 'capital-gain', 'capital-loss', \
-    'hours-per-week', 'marital-status', 'native-country', \
-    'occupation', 'race', 'relationship', 'sex', 'workclass']
+    cols = ['method', 'age', 'fnlwgt', 'education-num', 'capital-gain', 'capital-loss', 
+            'hours-per-week', 'marital-status', 'native-country', 
+            'occupation', 'race', 'relationship', 'sex', 'workclass']
+    num_feat = ['age', 'fnlwgt', 'education-num', 'capital-gain', 'capital-loss', 'hours-per-week']
 
 elif data_name == 'give_me_some_credit':
     
-    cols = ['method', 'age', 'RevolvingUtilizationOfUnsecuredLines', 'NumberOfTime30-59DaysPastDueNotWorse', 'DebtRatio', 'MonthlyIncome', 'NumberOfOpenCreditLinesAndLoans', 
-            'NumberOfTimes90DaysLate', 'NumberRealEstateLoansOrLines', 'NumberOfTime60-89DaysPastDueNotWorse', 'NumberOfDependents']
+    cols = ['method', 'age', 'RevolvingUtilizationOfUnsecuredLines', 'NumberOfTime30-59DaysPastDueNotWorse', 
+            'DebtRatio', 'MonthlyIncome', 'NumberOfOpenCreditLinesAndLoans', 
+            'NumberOfTimes90DaysLate', 'NumberRealEstateLoansOrLines', 'NumberOfTime60-89DaysPastDueNotWorse', 
+            'NumberOfDependents']
 
     to_write = results[cols].loc[263]
 
-    cols = ['Method', 'Age', 'Unsec. Lines', 'Nb Days Past 30', 'Debt Ratio', 'Month Inc.', 'Nb Credit Lines', 'Nb Times 90 Days Late', 'Nb Real Estate Loans', 'Nb Times 60 Days Past', 'Nb Dep.']
+    cols = ['method', 'Age', 'Unsec. Lines', 'Nb Days Past 30', 'Debt Ratio', 'Month Inc.', 'Nb Credit Lines', 
+            'Nb Times 90 Days Late', 'Nb Real Estate Loans', 'Nb Times 60 Days Past', 'Nb Dep.']
+    num_feat = ['Age', 'Unsec. Lines', 'Nb Days Past 30', 'Debt Ratio', 'Month Inc.', 'Nb Credit Lines', 
+                'Nb Times 90 Days Late', 'Nb Real Estate Loans', 'Nb Times 60 Days Past', 'Nb Dep.']
 
     to_write.columns = cols
 
@@ -199,11 +217,37 @@ elif data_name == 'compas':
     cols = ['method', 'age', 'two_year_recid', 'priors_count', 'length_of_stay', 'c_charge_degree', 'race', 'sex']
     to_write = results[cols].loc[40]
 
-    cols = ['Method', 'Age', 'Two Year Recid', 'Priors Count', 'Length of Stay', 'Charge Degree', 'Race', 'Sex']
+    cols = ['method', 'Age', 'Two Year Recid', 'Priors Count', 'Length of Stay', 'Charge Degree', 'Race', 'Sex']
+    num_feat = ['Age', 'Two Year Recid', 'Priors Count', 'Length of Stay']
 
     to_write.columns = cols
 
-print(to_write[cols].round(0).to_string())
+# Fix method names
+dct = {'original': 'Original', 
+       'cchvae': 'C-CHVAE',
+       'cem-vae': 'CEM-VAE',
+       'clue': 'CLUE',
+       'crud': 'CRUDS',
+       'face': 'FACE',
+       'revise': 'REViSE',
+       'mcce': 'MCCE'}
+
+to_write['method'] = [dct[item] for item in to_write['method']]
+
+to_write = to_write[cols].round(0)
+
+# Order the methods
+s1 = to_write[to_write['method'] == 'Original']
+s2 = to_write[to_write['method'] == 'MCCE']
+s3 = to_write[(to_write['method'] != 'Original') & (to_write['method'] != 'MCCE')]
+
+to_write = pd.concat([s1, s3.sort_values('method'), s2])
+
+# Remove decimal point
+to_write[num_feat] = to_write[num_feat].astype(np.int64)
+
+print(to_write.to_string())
+print(to_write.to_latex(index=False))  
  
 
     

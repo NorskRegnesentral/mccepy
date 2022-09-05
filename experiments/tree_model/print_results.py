@@ -4,6 +4,7 @@ import argparse
 import numpy as np
 import warnings
 warnings.filterwarnings('ignore')
+import numpy as np
 
 import pandas as pd
 pd.set_option('display.max_columns', None)
@@ -125,13 +126,22 @@ parser.add_argument(
     default=10000,
     help="Number of observations to sample from each end node for MCCE method.",
 )
-
+parser.add_argument(
+    "-device",
+    "--device",
+    type=str,
+    default='cuda',
+    help="Whether the CARLA methods were trained with a GPU (default) or CPU.",
+)
 args = parser.parse_args()
 
 path = args.path
 data_name = args.dataset
 n_test = args.number_of_samples
 k = args.k
+device = args.device
+if data_name == 'compas':
+    k = 1000
 
 # Load data set from CARLA
 dataset = OnlineCatalog(data_name)
@@ -144,9 +154,9 @@ test_factual = factuals.iloc[:n_test]
 
 # Read results
 try:
-    df_cfs = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_tree_model_k_{k}_n_{n_test}.csv"), index_col=0)
+    df_cfs = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_tree_model_k_{k}_n_{n_test}_{device}.csv"), index_col=0)
 except:
-    sys.exit(f"No MCCE results saved for k {k} and n_test {n_test} in {path}")
+    sys.exit(f"No MCCE results saved for {data_name}, k {k}, n_test {n_test}, and device {device} in {path}")
 df_cfs.sort_index(inplace=True)
     
 # Remove missing values
@@ -194,18 +204,52 @@ if len(counterfactuals_without_nans) > 0:
 
 
 cols = ['method', 'L0', 'L2', 'feasibility', 'success', 'violation', 'time (seconds)']
-temp = results[cols]  # pd.concat([all_results[cols], results[cols]], axis=0)
+temp = results[cols]
 
 print("Writing results")
-to_write = temp[['method', 'L0', 'L2', 'feasibility', 'violation', 'success', 'time (seconds)']].groupby(['method']).mean()
-to_write.reset_index(inplace=True)
+to_write_mean = temp[['method', 'L0', 'L2', 'feasibility', 'violation', 'success', 'time (seconds)']].groupby(['method']).mean()
+to_write_mean.reset_index(inplace=True)
 
 to_write_sd = temp[['method', 'L0', 'L2', 'feasibility', 'violation', 'success']].groupby(['method']).std()
 to_write_sd.reset_index(inplace=True)
 to_write_sd.rename(columns={'L0': 'L0_sd', 'L2': 'L2_sd', 'feasibility': 'feasibility_sd', 'violation': 'violation_sd', 'success': 'success_sd'}, inplace=True)
 
 CE_N = temp.groupby(['method']).size().reset_index().rename(columns={0: 'CE_N'})
-to_write = pd.concat([to_write, to_write_sd[['L0_sd', 'L2_sd', 'feasibility_sd', 'violation_sd', 'success_sd']], CE_N.CE_N], axis=1)
+to_write = pd.concat([to_write_mean, to_write_sd[['L0_sd', 'L2_sd', 'feasibility_sd', 'violation_sd', 'success_sd']], CE_N.CE_N], axis=1)
 to_write = to_write[['method', 'L0', 'L0_sd', 'L2', 'L2_sd', 'feasibility', 'feasibility_sd', 'violation', 'violation_sd', 'success', 'CE_N', 'time (seconds)']]
 
-print(to_write.round(2).to_string())
+
+# Fix method names
+dct = {'original': 'Original', 
+       'cchvae': 'C-CHVAE',
+       'cem-vae': 'CEM-VAE',
+       'clue': 'CLUE',
+       'crud': 'CRUDS',
+       'face': 'FACE',
+       'revise': 'REViSE',
+       'mcce': 'MCCE'}
+
+to_write['method'] = [dct[item] for item in to_write['method']]
+
+# Order the methods
+s1 = to_write[to_write['method'] == 'MCCE']
+s2 = to_write[(to_write['method'] != 'Original') & (to_write['method'] != 'MCCE')]
+to_write = pd.concat([s2.sort_values('method'), s1])
+
+# Remove decimal point
+num_feat = ['CE_N']
+to_write[num_feat] = to_write[num_feat].astype(np.int64)
+
+to_write = to_write.round(2)
+
+cols = ['L0', 'L0_sd', 'L2', 'L2_sd', 'feasibility', 'feasibility_sd', 'violation', 'violation_sd', 'success']
+to_write[cols] = to_write[cols].astype(str)
+
+# Add the standard deviations in original columns
+to_write["L0"] = to_write["L0"] + " (" + to_write["L0_sd"] + ")"
+to_write["L2"] = to_write["L2"] + " (" + to_write["L2_sd"] + ")"
+to_write["feasibility"] = to_write["feasibility"] + " (" + to_write["feasibility_sd"] + ")"
+to_write["violation"] = to_write["violation"] + " (" + to_write["violation_sd"] + ")"
+
+print(to_write[['method', 'L0', 'L2', 'feasibility', 'violation', 'success', 'CE_N', 'time (seconds)']].to_string())
+print(to_write[['method', 'L0', 'L2', 'feasibility', 'violation', 'success', 'CE_N', 'time (seconds)']].to_latex(index=False))

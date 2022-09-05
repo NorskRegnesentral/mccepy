@@ -122,13 +122,22 @@ parser.add_argument(
     default=10000,
     help="Number of observations to sample from each end node for MCCE method.",
 )
-
+parser.add_argument(
+    "-device",
+    "--device",
+    type=str,
+    default='cuda',
+    help="Whether the CARLA methods were trained with a GPU (default) or CPU.",
+)
 args = parser.parse_args()
 
 path = args.path
 data_name = args.dataset
 n_test = args.number_of_samples
 k = args.k
+if data_name == 'compas':
+    k = 1000
+device = args.device
 
 dataset = OnlineCatalog(data_name)
 
@@ -140,7 +149,7 @@ test_factual = factuals.iloc[:n_test]
 test_factual = dataset.inverse_transform(test_factual[factuals.columns])
 
 try:
-    df_cfs = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_tree_model_k_{k}_n_{n_test}.csv"), index_col=0)
+    df_cfs = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_tree_model_k_{k}_n_{n_test}_{device}.csv"), index_col=0)
 except:
     sys.exit(f"No MCCE results saved for k {k} and n_test {n_test} in {path}")
 
@@ -201,27 +210,58 @@ if data_name == 'adult':
     to_write[feature] = [dct[item] for item in to_write[feature]]
 
     cols = ['method', 'age', 'fnlwgt', 'education-num', 'capital-gain', 'capital-loss', 'hours-per-week', 'marital-status', 'native-country', 'occupation', 'race', 'relationship', 'sex', 'workclass']
+    num_feat = ['age', 'fnlwgt', 'education-num', 'capital-gain', 'capital-loss', 'hours-per-week']
 
 elif data_name == 'give_me_some_credit':
-    cols = ['method', 'age', 'RevolvingUtilizationOfUnsecuredLines', 
-            'NumberOfTime30-59DaysPastDueNotWorse', 'DebtRatio', 'MonthlyIncome', 
-            'NumberOfOpenCreditLinesAndLoans', 'NumberOfTimes90DaysLate', 
-            'NumberRealEstateLoansOrLines', 'NumberOfTime60-89DaysPastDueNotWorse', 
+    cols = ['method', 'age', 'RevolvingUtilizationOfUnsecuredLines', 'NumberOfTime30-59DaysPastDueNotWorse', 
+            'DebtRatio', 'MonthlyIncome', 'NumberOfOpenCreditLinesAndLoans', 
+            'NumberOfTimes90DaysLate', 'NumberRealEstateLoansOrLines', 'NumberOfTime60-89DaysPastDueNotWorse', 
             'NumberOfDependents']
 
     to_write = results[cols].loc[[287, 512]].sort_index() # , 1013, 1612
 
-    cols = ['method', 'Age', 'Unsec. Lines', 
-            '30 Days Past', 'Debt Ratio', 'Month Inc', 
-            'Credit Lines', '90 Days Late', 
-            'Real Est. Loans', '60 Days Past', 'Nb Dep.']
+    cols = ['method', 'Age', 'Unsec. Lines', 'Nb Days Past 30', 'Debt Ratio', 'Month Inc.', 'Nb Credit Lines', 
+            'Nb Times 90 Days Late', 'Nb Real Estate Loans', 'Nb Times 60 Days Past', 'Nb Dep.']
+    num_feat = ['Age', 'Unsec. Lines', 'Nb Days Past 30', 'Debt Ratio', 'Month Inc.', 'Nb Credit Lines', 
+                'Nb Times 90 Days Late', 'Nb Real Estate Loans', 'Nb Times 60 Days Past', 'Nb Dep.']
 
     to_write.columns = cols
 
 elif data_name == 'compas':
-    cols = ['method', 'age', 'two_year_recid', 'priors_count', 'length_of_stay', 
-            'c_charge_degree', 'race', 'sex']
-
+    cols = ['method', 'age', 'two_year_recid', 'priors_count', 'length_of_stay', 'c_charge_degree', 'race', 'sex']
+    
     to_write = results[cols].loc[[67, 286]].sort_index()
 
-print(to_write[cols].round(0).to_string())
+    cols = ['method', 'Age', 'Two Year Recid', 'Priors Count', 'Length of Stay', 'Charge Degree', 'Race', 'Sex']
+    num_feat = ['Age', 'Two Year Recid', 'Priors Count', 'Length of Stay']
+
+    to_write.columns = cols
+
+# Fix method names
+dct = {'original': 'Original', 
+       'cchvae': 'C-CHVAE',
+       'cem-vae': 'CEM-VAE',
+       'clue': 'CLUE',
+       'crud': 'CRUDS',
+       'face': 'FACE',
+       'revise': 'REViSE',
+       'mcce': 'MCCE'}
+
+to_write['method'] = [dct[item] for item in to_write['method']]
+
+to_write = to_write[cols].round(0)
+
+# Order the methods
+s1 = to_write[to_write['method'] == 'Original'].iloc[0:1]
+s2 = to_write[to_write['method'] == 'MCCE'].iloc[0:1]
+s3 = to_write[to_write['method'] == 'Original'].iloc[1:2]
+s4 = to_write[to_write['method'] == 'MCCE'].iloc[1:2]
+
+to_write = pd.concat([s1, s2, s3, s4])
+
+# Remove decimal point
+to_write[num_feat] = to_write[num_feat].astype(np.int64)
+
+print(to_write.to_string())
+print(to_write.to_latex(index=False))  
+ 

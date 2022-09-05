@@ -7,10 +7,12 @@ import time
 import os
 import argparse
 import pandas as pd
-
+from sklearn import preprocessing
 from mcce.mcce import MCCE
 
 # must do pip install . in CARLA_version_2 directory
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
 parser = argparse.ArgumentParser(description="Fit MCCE when categorical features have more than two levels.")
 parser.add_argument(
@@ -92,12 +94,15 @@ continuous = ["age", "fnlwgt", "education-num", "capital-gain", "hours-per-week"
 categorical = ["marital-status", "native-country", "occupation", "race", "relationship", "sex", "workclass"]
 immutable = ["age", "sex"]
 
+encoding_method = preprocessing.OneHotEncoder(
+            drop="first", sparse=False
+        )
 dataset = CsvCatalog(file_path="Data/adult_data.csv",
                      continuous=continuous,
                      categorical=categorical,
                      immutables=immutable,
                      target='income',
-                     encoding_method="OneHot_drop_first", # New!
+                     encoding_method=encoding_method#"OneHot_drop_first", # New!
                      )
 
 print("Fit predictive model")
@@ -155,7 +160,8 @@ results['data'] = 'adult'
 results['method'] = 'mcce'
 results[y_col] = test_factual[y_col]
 
-cols = ['data', 'method'] + cat_feat_encoded.tolist() + cont_feat + [y_col] + ['time (seconds)']
+# cols = ['data', 'method'] + cat_feat_encoded.tolist() + cont_feat + [y_col] + ['time (seconds)']
+cols = ['data', 'method'] + cat_feat_encoded.tolist() + cont_feat + [y_col] + ['time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']
 results.sort_index(inplace=True)
 
-results[cols].to_csv(os.path.join(path, f"adult_mcce_results_higher_cardinality_k_{k}_n_{n_test}.csv"))
+results[cols].to_csv(os.path.join(path, f"adult_mcce_results_higher_cardinality_k_{k}_n_{n_test}_{device}.csv"))

@@ -4,6 +4,7 @@ import argparse
 import warnings
 warnings.filterwarnings('ignore')
 
+import torch
 import numpy as np
 
 from sklearn import metrics
@@ -82,6 +83,7 @@ class RandomForestModel(MLModel):
     def predict_proba(self, x):
         return self._mymodel.predict_proba(self.get_ordered_features(x))
 
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
 parser = argparse.ArgumentParser(description="Fit MCCE when the underlying predictive function is a decision tree.")
 parser.add_argument(
@@ -119,6 +121,8 @@ data_name = args.dataset
 n_test = args.number_of_samples
 k = args.k
 path = args.path
+if data_name == 'compas':
+    k = 1000
 
 # Load data set from CARLA
 dataset = OnlineCatalog(data_name)
@@ -175,7 +179,8 @@ results['method'] = 'mcce'
 results[y_col] = test_factual[y_col]
 
 print("Save results")
-cols = ['data', 'method'] + cat_feat_encoded.tolist() + cont_feat + [y_col] + ['time (seconds)']
+# cols = ['data', 'method'] + cat_feat_encoded.tolist() + cont_feat + [y_col] + ['time (seconds)']
+cols = ['data', 'method'] + cat_feat_encoded.tolist() + cont_feat + [y_col] + ['time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']
 results.sort_index(inplace=True)
 
-results[cols].to_csv(os.path.join(path, f"{data_name}_mcce_results_tree_model_k_{k}_n_{n_test}.csv"))
+results[cols].to_csv(os.path.join(path, f"{data_name}_mcce_results_tree_model_k_{k}_n_{n_test}_{device}.csv"))

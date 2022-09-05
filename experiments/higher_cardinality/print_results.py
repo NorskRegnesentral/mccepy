@@ -3,6 +3,7 @@ import sys
 import argparse
 import warnings
 warnings.filterwarnings('ignore')
+import numpy as np
 
 import torch
 torch.manual_seed(0)
@@ -11,6 +12,7 @@ from carla.data.catalog import CsvCatalog
 from carla.models.catalog import MLModelCatalog
 from carla.models.negative_instances import predict_negative_instances
 
+from sklearn import preprocessing
 import pandas as pd
 pd.set_option('display.max_columns', None)
 
@@ -44,7 +46,13 @@ parser.add_argument(
     action='store_true',  # default is False
     help="Whether to train the prediction model from scratch or not. Default will not train.",
 )
-
+parser.add_argument(
+    "-device",
+    "--device",
+    type=str,
+    default='cuda',
+    help="Whether the CARLA methods were trained with a GPU (default) or CPU.",
+)
 
 args = parser.parse_args()
 
@@ -52,18 +60,23 @@ path = args.path
 n_test = args.number_of_samples
 k = args.k
 force_train = args.force_train
+device = args.device # cuda # cpu
 
 print("Read in processed data using CARLA functionality")
 continuous = ["age", "fnlwgt", "education-num", "capital-gain", "hours-per-week", "capital-loss"]
 categorical = ["marital-status", "native-country", "occupation", "race", "relationship", "sex", "workclass"]
 immutables = ["age", "sex"]
 
+encoding_method = preprocessing.OneHotEncoder(
+            drop="first", sparse=False
+        )
+
 dataset = CsvCatalog(file_path="Data/train_not_normalized_data_from_carla.csv",
                      continuous=continuous,
                      categorical=categorical,
                      immutables=immutables,
                      target='income',
-                     encoding_method="OneHot_drop_first", # New!
+                     encoding_method=encoding_method#"OneHot_drop_first", # New!
                      )
 
 print("Fit predictive model")
@@ -92,7 +105,7 @@ test_factual = factuals.iloc[:n_test]
 print(f"Calculating results")
 
 try:
-    cfs = pd.read_csv(os.path.join(path, f"adult_mcce_results_higher_cardinality_k_{k}_n_{n_test}.csv"), index_col=0)
+    cfs = pd.read_csv(os.path.join(path, f"adult_mcce_results_higher_cardinality_k_{k}_n_{n_test}_{device}.csv"), index_col=0)
 except:
     sys.exit(f"No MCCE results saved for k {k} and n_test {n_test} in {path}")
     
@@ -146,15 +159,37 @@ cols = ['method', 'L0', 'L2', 'feasibility', 'success', 'violation', 'time (seco
 temp = results[cols]
 
 print("Writing results")
-to_write = temp[['method', 'L0', 'L2', 'feasibility', 'violation', 'success', 'time (seconds)']].groupby(['method']).mean()
-to_write.reset_index(inplace=True)
+to_write_mean = temp[['method', 'L0', 'L2', 'feasibility', 'violation', 'success', 'time (seconds)']].groupby(['method']).mean()
+to_write_mean.reset_index(inplace=True)
 
 to_write_sd = temp[['method', 'L0', 'L2', 'feasibility', 'violation', 'success']].groupby(['method']).std()
 to_write_sd.reset_index(inplace=True)
 to_write_sd.rename(columns={'L0': 'L0_sd', 'L2': 'L2_sd', 'feasibility': 'feasibility_sd', 'violation': 'violation_sd', 'success': 'success_sd'}, inplace=True)
 
 CE_N = temp.groupby(['method']).size().reset_index().rename(columns={0: 'CE_N'})
-to_write = pd.concat([to_write, to_write_sd[['L0_sd', 'L2_sd', 'feasibility_sd', 'violation_sd', 'success_sd']], CE_N.CE_N], axis=1)
+to_write = pd.concat([to_write_mean, to_write_sd[['L0_sd', 'L2_sd', 'feasibility_sd', 'violation_sd', 'success_sd']], CE_N.CE_N], axis=1)
 to_write = to_write[['method', 'L0', 'L0_sd', 'L2', 'L2_sd', 'feasibility', 'feasibility_sd', 'violation', 'violation_sd', 'success', 'CE_N', 'time (seconds)']]
 
+# Fix method names
+dct = {'mcce': 'MCCE'}
+to_write['method'] = [dct[item] for item in to_write['method']]
+
+
+# Remove decimal point
+num_feat = ['CE_N']
+to_write[num_feat] = to_write[num_feat].astype(np.int64)
+
+to_write = to_write.round(2)
+
+cols = ['L0', 'L0_sd', 'L2', 'L2_sd', 'feasibility', 'feasibility_sd', 'violation', 'violation_sd', 'success']
+to_write[cols] = to_write[cols].astype(str)
+
+# Add the standard deviations in original columns
+to_write["L0"] = to_write["L0"] + " (" + to_write["L0_sd"] + ")"
+to_write["L2"] = to_write["L2"] + " (" + to_write["L2_sd"] + ")"
+to_write["feasibility"] = to_write["feasibility"] + " (" + to_write["feasibility_sd"] + ")"
+to_write["violation"] = to_write["violation"] + " (" + to_write["violation_sd"] + ")"
+
 print(to_write.round(2).to_string())
+print(to_write[['method', 'L0', 'L2', 'feasibility', 'violation', 'success', 'CE_N', 'time (seconds)']].to_latex(index=False))
+

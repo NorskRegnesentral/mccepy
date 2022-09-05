@@ -1,6 +1,7 @@
 import os
 import argparse
 import warnings
+import numpy as np
 warnings.filterwarnings('ignore')
 
 from carla.data.catalog import OnlineCatalog
@@ -51,6 +52,13 @@ parser.add_argument(
     action='store_true',  # default is False
     help="Whether to train the prediction model from scratch or not. Default will not train.",
 )
+parser.add_argument(
+    "-device",
+    "--device",
+    type=str,
+    default='cuda',
+    help="Whether the CARLA methods were trained with a GPU (default) or CPU.",
+)
 
 args = parser.parse_args()
 
@@ -59,6 +67,9 @@ data_name = args.dataset
 n_test = args.number_of_samples
 k = args.k
 force_train = args.force_train
+device = args.device # cuda # cpu
+if data_name == 'compas':
+    k = 1000
 
 print(f"Load {data_name} data set")
 
@@ -112,19 +123,21 @@ for method in ['cchvae', 'cem-vae', 'revise', 'clue', 'crud', 'face', 'mcce']:
 
     if method == 'mcce':
         try:
-            cfs = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_k_{k}_n_{n_test}.csv"), index_col=0)
+            cfs = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_k_{k}_n_{n_test}_{device}.csv"), index_col=0)
         except:
             print(f"No {method} results saved for n_test {n_test} in {path}")
             continue
     else:
         try:
-            cfs = pd.read_csv(os.path.join(path, f"{data_name}_carla_results_n_{n_test}.csv"), index_col=0)
+            cfs = pd.read_csv(os.path.join(path, f"{data_name}_carla_results_n_{n_test}_{device}.csv"), index_col=0)
         except:
             print(f"No {method} results saved for n_test {n_test} in {path}")
             continue
     
     df_cfs = cfs[cfs['method'] == method].drop(['method',	'data'], axis=1)
     df_cfs.sort_index(inplace=True)
+    if dataset.target not in df_cfs.columns:
+        df_cfs = df_cfs.join(test_factual[dataset.target])
     
     # remove missing values
     nan_idx = df_cfs.index[df_cfs.isnull().any(axis=1)]
@@ -167,31 +180,53 @@ for method in ['cchvae', 'cem-vae', 'revise', 'clue', 'crud', 'face', 'mcce']:
 
         all_results = pd.concat([all_results, results], axis=0)
 
-# OLD RESULTS THAT ARE CURRENTLY IN THE PAPER
-# if data_name == 'adult':
-#     all_results = pd.read_csv("Final_results_Aug/adult_results_mcce_and_carla_K_10000_n_100.csv", index_col=0)
-# elif data_name == 'give_me_some_credit':
-#     all_results = pd.read_csv("Final_results_Aug/give_me_some_credit_results_mcce_and_carla_K_10000_n_100.csv")
-
-# all_results.rename(columns={'violations': 'violation', 'validity': 'success'}, inplace=True)
-# results = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_k_{K}_n_{n_test}.csv"), index_col=0)
-# results.sort_index(inplace=True)
-
-print("Concat all results")
 cols = ['method', 'L0', 'L2', 'feasibility', 'success', 'violation', 'time (seconds)']
 temp = all_results[cols]
 
-print(f"Writing results for {data_name}")
-to_write = temp[['method', 'L0', 'L2', 'feasibility', 'violation', 'success', 'time (seconds)']].groupby(['method']).mean()
-to_write.reset_index(inplace=True)
+print(f"Writing results for {data_name} {device}")
+to_write_mean = temp[['method', 'L0', 'L2', 'feasibility', 'violation', 'success', 'time (seconds)']].groupby(['method']).mean()
+to_write_mean.reset_index(inplace=True)
 
 to_write_sd = temp[['method', 'L0', 'L2', 'feasibility', 'violation', 'success']].groupby(['method']).std()
 to_write_sd.reset_index(inplace=True)
 to_write_sd.rename(columns={'L0': 'L0_sd', 'L2': 'L2_sd', 'feasibility': 'feasibility_sd', 'violation': 'violation_sd', 'success': 'success_sd'}, inplace=True)
 
-
 CE_N = temp.groupby(['method']).size().reset_index().rename(columns={0: 'CE_N'})
-to_write = pd.concat([to_write, to_write_sd[['L0_sd', 'L2_sd', 'feasibility_sd', 'violation_sd', 'success_sd']], CE_N.CE_N], axis=1)
+
+to_write = pd.concat([to_write_mean, to_write_sd[['L0_sd', 'L2_sd', 'feasibility_sd', 'violation_sd', 'success_sd']], CE_N.CE_N], axis=1)
 to_write = to_write[['method', 'L0', 'L0_sd', 'L2', 'L2_sd', 'feasibility', 'feasibility_sd', 'violation', 'violation_sd', 'success', 'CE_N', 'time (seconds)']]
 
-print(to_write.round(2).to_string())
+# Fix method names
+dct = {'original': 'Original', 
+       'cchvae': 'C-CHVAE',
+       'cem-vae': 'CEM-VAE',
+       'clue': 'CLUE',
+       'crud': 'CRUDS',
+       'face': 'FACE',
+       'revise': 'REViSE',
+       'mcce': 'MCCE'}
+
+to_write['method'] = [dct[item] for item in to_write['method']]
+
+# Order the methods
+s1 = to_write[to_write['method'] == 'MCCE']
+s2 = to_write[(to_write['method'] != 'Original') & (to_write['method'] != 'MCCE')]
+to_write = pd.concat([s2.sort_values('method'), s1])
+
+# Remove decimal point
+num_feat = ['CE_N']
+to_write[num_feat] = to_write[num_feat].astype(np.int64)
+
+to_write = to_write.round(2)
+
+cols = ['L0', 'L0_sd', 'L2', 'L2_sd', 'feasibility', 'feasibility_sd', 'violation', 'violation_sd', 'success']
+to_write[cols] = to_write[cols].astype(str)
+
+# Add the standard deviations in original columns
+to_write["L0"] = to_write["L0"] + " (" + to_write["L0_sd"] + ")"
+to_write["L2"] = to_write["L2"] + " (" + to_write["L2_sd"] + ")"
+to_write["feasibility"] = to_write["feasibility"] + " (" + to_write["feasibility_sd"] + ")"
+to_write["violation"] = to_write["violation"] + " (" + to_write["violation_sd"] + ")"
+
+print(to_write[['method', 'L0', 'L2', 'feasibility', 'violation', 'success', 'CE_N', 'time (seconds)']].to_string())
+print(to_write[['method', 'L0', 'L2', 'feasibility', 'violation', 'success', 'CE_N', 'time (seconds)']].to_latex(index=False))

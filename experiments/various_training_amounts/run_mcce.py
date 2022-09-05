@@ -63,12 +63,15 @@ parser.add_argument(
     help="Number of seeds to set for simulation.",
 )
 
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
 args = parser.parse_args()
 
 n_test = args.number_of_samples
 k = args.k
 data_name = args.dataset
+if data_name == 'compas':
+    k = 1000
 force_train = args.force_train
 num_seeds = args.s
 path = args.path
@@ -221,5 +224,5 @@ for n in n_list:
 
 
 cols = ['data', 'method', 'n', 'seed', 'L0', 'L1', 'L2', 'feasibility', 'violation', 'success', 'time (seconds)'] + cat_feat + cont_feat + [y_col]
-all_results[cols].to_csv(os.path.join(path, f"{data_name}_mcce_results_various_training_amounts_k_{k}_n_{n_test}.csv"))
+all_results[cols].to_csv(os.path.join(path, f"{data_name}_mcce_results_various_training_amounts_k_{k}_n_{n_test}_{device}.csv"))
 

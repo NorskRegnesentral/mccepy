@@ -9,11 +9,13 @@ import carla.recourse_methods.catalog as recourse_catalog
 
 import torch
 
-PATH = 'Final_results_new'
-# must do pip install . in CARLA_version_2 directory
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+path = 'Final_results_carla_005'
+# must do pip install . in CARLA_version_3 directory
 
 def save_csv(df, data_name):
-    file_name = os.path.join(PATH, f"{data_name}_carla_results_gpu.csv")
+    file_name = os.path.join(path, f"{data_name}_carla_results_n_{n_test}_{device}.csv")
 
     if os.path.exists(file_name):
         df.to_csv(file_name, mode='a', header=False, index=True)
@@ -40,7 +42,7 @@ parser.add_argument(
         "clue",
         "crud",
         "revise",
-        "face" # fixed reproducibility
+        "face"
     ],
     choices=[
         "cchvae",
@@ -60,13 +62,6 @@ parser.add_argument(
     help="Number of instances per dataset",
 )
 parser.add_argument(
-    "-p",
-    "--path",
-    type=str,
-    default="manifold_results.csv",
-    help="Path to save results",
-)
-parser.add_argument(
     "-ft",
     "--force_train",
     action='store_true',  # default is False
@@ -79,7 +74,6 @@ force_train = args.force_train
 
 for data_name in args.dataset:
     print(f"Training data set: {data_name}")
-    # load catalog dataset
     dataset = OnlineCatalog(data_name)
 
     torch.manual_seed(0)
@@ -118,7 +112,9 @@ for data_name in args.dataset:
         )
 
     factuals = predict_negative_instances(ml_model, dataset.df)
-    test_factual = factuals.iloc[:n_test] # .reset_index()
+    test_factual = factuals.iloc[:n_test]
+
+    nb_immutables = len(dataset.immutables)
 
     for rm in (args.recourse_method):
         print(f"Finding counterfactuals using: {rm}")
@@ -135,8 +131,7 @@ for data_name in args.dataset:
                 "target_class": [0, 1],
                 "binary_cat_features": True,
                 "vae_params": {
-                    "layers": [
-                    len(ml_model.feature_input_order)] + [512, 256, 8],
+                    "layers": [len(ml_model.feature_input_order) - nb_immutables, 512, 256, 8],
                     "train": True,
                     "lambda_reg": 1e-6,
                     "epochs": 5,
@@ -167,7 +162,7 @@ for data_name in args.dataset:
                 "clamp": True,
                 "binary_cat_features": False,
                 "vae_params": {
-                    "layers": [len(ml_model.feature_input_order), 512, 256, 8],
+                    "layers": [len(ml_model.feature_input_order) - nb_immutables, 512, 256, 8],
                     "train": True,
                     "lambda_reg": 1e-6,
                     "epochs": 5,
@@ -198,7 +193,7 @@ for data_name in args.dataset:
                 "max_iter": 2000,
                 "binary_cat_features": False,
                 "vae_params": {
-                    "layers": [len(ml_model.feature_input_order)] + [16, 8],
+                    "layers": [len(ml_model.feature_input_order)-nb_immutables, 16, 8],
                     "train": True,
                     "epochs": 5,
                     "lr": 1e-3,
@@ -274,7 +269,7 @@ for data_name in args.dataset:
 
                     cem = recourse_catalog.CEM(ann_sess, ml_model_sess, hyperparams)
                     df_cfs = cem.get_counterfactuals(factuals_sess)
-                    print(df_cfs)
+                    
                     df_cfs.index = test_factual.index
                     df_cfs.insert(0, 'method', rm)
                     df_cfs.insert(1, 'data', data_name)

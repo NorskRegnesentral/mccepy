@@ -1,8 +1,9 @@
+import os
+import sys
+import argparse
 import warnings
 warnings.filterwarnings('ignore')
-
-import pandas as pd
-pd.set_option('display.max_columns', None)
+import numpy as np
 
 import torch
 torch.manual_seed(0)
@@ -11,9 +12,9 @@ from carla.data.catalog import CsvCatalog
 from carla.models.catalog import MLModelCatalog
 from carla.models.negative_instances import predict_negative_instances
 
-import os
-import sys
-import argparse
+from sklearn import preprocessing
+import pandas as pd
+pd.set_option('display.max_columns', None)
 
 parser = argparse.ArgumentParser(description="Print counterfactual examples generated with MCCE.")
 parser.add_argument(
@@ -43,7 +44,13 @@ parser.add_argument(
     action='store_true',  # default is False
     help="Whether to train the prediction model from scratch or not. Default will not train.",
 )
-
+parser.add_argument(
+    "-device",
+    "--device",
+    type=str,
+    default='cuda',
+    help="Whether the CARLA methods were trained with a GPU (default) or CPU.",
+)
 
 args = parser.parse_args()
 
@@ -51,11 +58,12 @@ path = args.path
 n_test = args.number_of_samples
 k = args.k
 force_train = args.force_train
+device = args.device
 
 print("Read in processed data using CARLA functionality")
 continuous = ["age", "fnlwgt", "education-num", "capital-gain", "hours-per-week", "capital-loss"]
 categorical = ["marital-status", "native-country", "occupation", "race", "relationship", "sex", "workclass"]
-immutable = ["age", "sex"]
+immutables = ["age", "sex"]
 
 train_path = "Data/adult.data"
 test_path = "Data/adult.test"
@@ -63,12 +71,16 @@ train = pd.read_csv(train_path, sep=", ", header=None, names=['age', 'workclass'
 test = pd.read_csv(test_path, skiprows=1, sep=", ", header=None, names=['age', 'workclass', 'fnlwgt', 'education', 'education-num', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'capital-gain', 'capital-loss', 'hours-per-week', 'native-country', 'income'])
 df = pd.concat([train, test], axis=0, ignore_index=True)
 
+encoding_method = preprocessing.OneHotEncoder(
+            drop="first", sparse=False
+        )
+
 dataset = CsvCatalog(file_path="Data/train_not_normalized_data_from_carla.csv",
                      continuous=continuous,
                      categorical=categorical,
-                     immutables=immutable,
+                     immutables=immutables,
                      target='income',
-                     encoding_method="OneHot_drop_first", # New!
+                     encoding_method=encoding_method#"OneHot_drop_first", # New!
                      )
 
 print("Fit predictive model")
@@ -97,7 +109,7 @@ test_factual = factuals.iloc[:100]
 print(f"Printing examples")
 
 try:
-    cfs = pd.read_csv(os.path.join(path, f"adult_mcce_results_higher_cardinality_k_{k}_n_{n_test}.csv"), index_col=0)
+    cfs = pd.read_csv(os.path.join(path, f"adult_mcce_results_higher_cardinality_k_{k}_n_{n_test}_{device}.csv"), index_col=0)
 except:
     sys.exit(f"No MCCE results saved for k {k} and n_test {n_test} in {path}")
 
@@ -107,14 +119,15 @@ df_cfs.sort_index(inplace=True)
 cfs = dataset.inverse_transform(cfs)
 test_factual = dataset.inverse_transform(test_factual)
 
-cfs['method'] = 'MCCE'
-test_factual['method'] = 'Original'
+cfs['method'] = 'mcce'
+test_factual['method'] = 'original'
 
 temp = pd.concat([test_factual, cfs], axis=0)
 
-cols = ['method', 'age', 'fnlwgt', 'education-num', 'capital-gain', 'capital-loss', \
-       'hours-per-week', 'marital-status', 'native-country', \
-       'occupation', 'race', 'relationship', 'sex', 'workclass']
+cols = ['method', 'age', 'fnlwgt', 'education-num', 'capital-gain', 'capital-loss', 
+        'hours-per-week', 'marital-status', 'native-country', 
+        'occupation', 'race', 'relationship', 'sex', 'workclass']
+num_feat = ['age', 'fnlwgt', 'education-num', 'capital-gain', 'capital-loss', 'hours-per-week']
 
 to_write = temp[cols].loc[[1, 31]].sort_index() # , 122, 124
 to_write.columns = cols
@@ -159,4 +172,24 @@ feature = 'workclass'
 dct = {'Self-emp-not-inc': 'SENI', 'Private': 'P', 'Never-worked': 'NW'}
 to_write[feature] = [dct[item] for item in to_write[feature]]
 
-print(to_write.round(0).to_string())
+# Fix method names
+dct = {'original': 'Original',
+       'mcce': 'MCCE'}
+
+to_write['method'] = [dct[item] for item in to_write['method']]
+
+to_write = to_write[cols].round(0)
+
+# Order the methods
+s1 = to_write[to_write['method'] == 'Original'].iloc[0:1]
+s2 = to_write[to_write['method'] == 'MCCE'].iloc[0:1]
+s3 = to_write[to_write['method'] == 'Original'].iloc[1:2]
+s4 = to_write[to_write['method'] == 'MCCE'].iloc[1:2]
+
+to_write = pd.concat([s1, s2, s3, s4])
+
+# Remove decimal point
+to_write[num_feat] = to_write[num_feat].astype(np.int64)
+
+print(to_write.to_string())
+print(to_write.to_latex(index=False))

@@ -46,28 +46,34 @@ class MCCE:
         self.categorical = dataset.categorical
         self.immutables = dataset.immutables
 
-        # Get the new categorical feature names after encoding
-        self.categorical_encoded = dataset.encoder.get_feature_names(self.categorical).tolist()
-        
-        # Get the new immutable feature names after encoding
-        immutables_encoded = []
-        for immutable in self.immutables:
-            if immutable in self.categorical:
-                for new_col in self.categorical_encoded:
-                    match = re.search(immutable, new_col)
-                    if match:
-                        immutables_encoded.append(new_col)
-            else:
-                immutables_encoded.append(immutable)
-
-        self.immutables_encoded = immutables_encoded
-
         self.seed = seed
         self.model = model
 
         self.method = None
         self.visit_sequence = None
         self.predictor_matrix = None
+
+        if hasattr(dataset, 'categorical_encoded'):
+            self.categorical_encoded = dataset.categorical_encoded
+        else:
+            # Get the new categorical feature names after encoding
+            self.categorical_encoded = dataset.encoder.get_feature_names(self.categorical).tolist()
+
+        if hasattr(dataset, 'immutables_encoded'):
+            self.immutables_encoded = dataset.immutables_encoded
+        else:
+            # Get the new immutable feature names after encoding
+            immutables_encoded = []
+            for immutable in self.immutables:
+                if immutable in self.categorical:
+                    for new_col in self.categorical_encoded:
+                        match = re.search(immutable, new_col)
+                        if match:
+                            immutables_encoded.append(new_col)
+                else:
+                    immutables_encoded.append(immutable)
+
+            self.immutables_encoded = immutables_encoded
 
         if not hasattr(self.model, "predict"):
             sys.exit("model does not have predict function.")
@@ -136,20 +142,37 @@ class MCCE:
         
         self.saved_methods = {}
         self.trees = {}
+        self.fitted_model = {}
 
         # train
         self.predictor_matrix_columns = self.predictor_matrix.columns.to_numpy()
+        # print(self.visit_sequence.sort_values())
         for col, _ in self.visit_sequence.sort_values().iteritems():
+            
             # initialise the method
-            col_method = METHODS_MAP[self.method[col]](dtype=self.df_dtypes[col], random_state=self.seed)
+            col_method = METHODS_MAP[self.method[col]](dtype=self.df_dtypes[col],
+                                                       minibucket=5,
+                                                       max_depth=2, 
+                                                       random_state=self.seed)
             
             # fit the method
             col_predictors = self.predictor_matrix_columns[self.predictor_matrix.loc[col].to_numpy() == 1]
+            
             col_method.fit(X_df=df[col_predictors], y_df=df[col])
 
             # save the method
             if self.method[col] == 'cart':
                 self.trees[col] = col_method.leaves_y_dict
+                self.fitted_model[col] = col_method.fitted_model
+            
+                
+            # if col == 'fnlwgt':
+                # print(df[col_predictors])
+                # print("\n")
+                # print(df[col])
+                # print(df[col_predictors].dtypes)
+                # print(col_method.leaves_y_dict)
+
             self.saved_methods[col] = col_method
 
     def generate(self, 
@@ -228,6 +251,8 @@ class MCCE:
 
         # Predict response of generated data
         cfs_positive = cfs[self.model.predict(cfs) >= cutoff]
+
+        self.cfs_positive = cfs_positive.shape
         
         # Duplicate original test observations N times where N is number of positive counterfactuals
         n_counterfactuals = cfs_positive.groupby(cfs_positive.index).size()
@@ -256,8 +281,8 @@ class MCCE:
             if(isinstance(idx_df, pd.DataFrame)): # If you have multiple rows
                 sparse = min(idx_df.L0) # 1) find least # features changed
                 sparse_df = idx_df[idx_df.L0 == sparse] 
-                closest = min(sparse_df.L2) # find smallest Gower distance
-                close_df = sparse_df[sparse_df.L2 == closest].head(1)
+                closest = min(sparse_df.L1) # find smallest Gower distance
+                close_df = sparse_df[sparse_df.L1 == closest].head(1)
 
             else: # if you have only one row - return that row
                 close_df = idx_df.to_frame().T

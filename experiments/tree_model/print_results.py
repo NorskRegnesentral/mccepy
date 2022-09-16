@@ -203,20 +203,20 @@ if len(counterfactuals_without_nans) > 0:
     results['time (seconds)'] = df_cfs['time (seconds)'].mean() 
 
 
-cols = ['method', 'L0', 'L2', 'feasibility', 'success', 'violation', 'time (seconds)']
+cols = ['method', 'L0', 'L1', 'feasibility', 'success', 'violation', 'time (seconds)']
 temp = results[cols]
 
 print("Writing results")
-to_write_mean = temp[['method', 'L0', 'L2', 'feasibility', 'violation', 'success', 'time (seconds)']].groupby(['method']).mean()
+to_write_mean = temp[['method', 'L0', 'L1', 'feasibility', 'violation', 'success', 'time (seconds)']].groupby(['method']).mean()
 to_write_mean.reset_index(inplace=True)
 
-to_write_sd = temp[['method', 'L0', 'L2', 'feasibility', 'violation', 'success']].groupby(['method']).std()
+to_write_sd = temp[['method', 'L0', 'L1', 'feasibility', 'violation', 'success']].groupby(['method']).std()
 to_write_sd.reset_index(inplace=True)
-to_write_sd.rename(columns={'L0': 'L0_sd', 'L2': 'L2_sd', 'feasibility': 'feasibility_sd', 'violation': 'violation_sd', 'success': 'success_sd'}, inplace=True)
+to_write_sd.rename(columns={'L0': 'L0_sd', 'L1': 'L1_sd', 'feasibility': 'feasibility_sd', 'violation': 'violation_sd', 'success': 'success_sd'}, inplace=True)
 
 CE_N = temp.groupby(['method']).size().reset_index().rename(columns={0: 'CE_N'})
-to_write = pd.concat([to_write_mean, to_write_sd[['L0_sd', 'L2_sd', 'feasibility_sd', 'violation_sd', 'success_sd']], CE_N.CE_N], axis=1)
-to_write = to_write[['method', 'L0', 'L0_sd', 'L2', 'L2_sd', 'feasibility', 'feasibility_sd', 'violation', 'violation_sd', 'success', 'CE_N', 'time (seconds)']]
+to_write = pd.concat([to_write_mean, to_write_sd[['L0_sd', 'L1_sd', 'feasibility_sd', 'violation_sd', 'success_sd']], CE_N.CE_N], axis=1)
+to_write = to_write[['method', 'L0', 'L0_sd', 'L1', 'L1_sd', 'feasibility', 'feasibility_sd', 'violation', 'violation_sd', 'success', 'CE_N', 'time (seconds)']]
 
 
 # Fix method names
@@ -242,14 +242,15 @@ to_write[num_feat] = to_write[num_feat].astype(np.int64)
 
 to_write = to_write.round(2)
 
-cols = ['L0', 'L0_sd', 'L2', 'L2_sd', 'feasibility', 'feasibility_sd', 'violation', 'violation_sd', 'success']
+cols = ['L0', 'L0_sd', 'L1', 'L1_sd', 'feasibility', 'feasibility_sd', 'violation', 'violation_sd', 'success']
 to_write[cols] = to_write[cols].astype(str)
 
 # Add the standard deviations in original columns
 to_write["L0"] = to_write["L0"] + " (" + to_write["L0_sd"] + ")"
-to_write["L2"] = to_write["L2"] + " (" + to_write["L2_sd"] + ")"
+to_write["L1"] = to_write["L1"] + " (" + to_write["L1_sd"] + ")"
 to_write["feasibility"] = to_write["feasibility"] + " (" + to_write["feasibility_sd"] + ")"
 to_write["violation"] = to_write["violation"] + " (" + to_write["violation_sd"] + ")"
 
-print(to_write[['method', 'L0', 'L2', 'feasibility', 'violation', 'success', 'CE_N', 'time (seconds)']].to_string())
-print(to_write[['method', 'L0', 'L2', 'feasibility', 'violation', 'success', 'CE_N', 'time (seconds)']].to_latex(index=False))
+print(to_write[['method', 'L0', 'L1', 'feasibility', 'violation', 'success', 'CE_N', 'time (seconds)']].to_string())
+print("\n")
+print(to_write[['method', 'L0', 'L1', 'feasibility', 'violation', 'success', 'CE_N', 'time (seconds)']].to_latex(index=False))

@@ -11,7 +11,7 @@ import torch
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-path = 'Final_results_carla_005'
+path = 'Final_results_n_1000'
 # must do pip install . in CARLA_version_3 directory
 
 def save_csv(df, data_name):
@@ -116,7 +116,20 @@ for data_name in args.dataset:
 
     nb_immutables = len(dataset.immutables)
 
-    for rm in (args.recourse_method):
+    if data_name == 'adult':
+        recourse_methods = ["crud",
+                            "revise",
+                            "face"]
+    else:
+        recourse_methods = ["cchvae",
+                            "cem-vae",
+                            "clue",
+                            "crud",
+                            "revise",
+                            "face"]
+
+
+    for rm in recourse_methods:
         print(f"Finding counterfactuals using: {rm}")
         
         if rm == 'revise':

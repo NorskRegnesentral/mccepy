@@ -34,15 +34,16 @@ class CARTMethod(Method):
 
     .. [1] Leo Breiman, Jerome Friedman, Richard Olshen, and Charles Stone. 1984. Classification and regression trees. Chapman and Hall.
     """
-    def __init__(self, dtype, minibucket=5, random_state=None, *args, **kwargs):
+    def __init__(self, dtype, minibucket=5, max_depth=None, random_state=None, *args, **kwargs):
         self.dtype = dtype
         self.minibucket = minibucket
+        self.max_depth = max_depth
         self.random_state = random_state
 
         if self.dtype in CAT_COLS_DTYPES:
-            self.cart = DecisionTreeClassifier(min_samples_leaf=self.minibucket, random_state=self.random_state)
+            self.cart = DecisionTreeClassifier(min_samples_leaf=self.minibucket, max_depth=self.max_depth, random_state=self.random_state)
         if self.dtype in NUM_COLS_DTYPES:
-            self.cart = DecisionTreeRegressor(min_samples_leaf=self.minibucket, random_state=self.random_state)
+            self.cart = DecisionTreeRegressor(min_samples_leaf=self.minibucket, max_depth=self.max_depth, random_state=self.random_state)
 
     def fit(self, X_df, y_df):
         """
@@ -62,19 +63,21 @@ class CARTMethod(Method):
         X_df, y_df = self.prepare_dfs(X_df=X_df, y_df=y_df, normalise_num_cols=False, one_hot_cat_cols=False)
         
         self.X_df_after_one_hot = X_df
-        # print(X_df.columns)
+        # print(X_df.dtypes)
 
         if self.dtype in NUM_COLS_DTYPES:
             self.y_real_min, self.y_real_max = np.min(y_df), np.max(y_df)
 
         X = X_df.to_numpy()
         y = y_df.to_numpy()
+        # print(X)
         self.cart.fit(X, y)
 
         # save the y distribution wrt trained tree nodes
         leaves = self.cart.apply(X)
         leaves_y_df = pd.DataFrame({'leaves': leaves, 'y': y})
         self.leaves_y_dict = leaves_y_df.groupby('leaves').apply(lambda x: x.to_numpy()[:, -1]).to_dict()
+        self.fitted_model = self.cart
 
     def predict(self, X_test_df):
         """

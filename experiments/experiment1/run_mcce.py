@@ -118,7 +118,7 @@ mcce.fit(df.drop(dataset.target, axis=1), dtypes)
 time_fit = time.time()
 
 print("Sample observations from tree nodes")
-cfs = mcce.generate(test_factual.drop(y_col, axis=1), k=k)
+cfs = mcce.generate(test_factual.drop(dataset.target, axis=1), k=k)
 time_generate = time.time()
 
 print("Process sampled observations")

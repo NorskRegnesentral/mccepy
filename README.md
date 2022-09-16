@@ -12,14 +12,14 @@ cd mccepy
 pip install -r requirements.txt
 ```
 
-## Example - Use MCCE stand alone
+## Example
 
 For other examples (e.g., how to use MCCE with the CARLA package), see examples/.
 
 This example uses the [US adult census dataset](https://archive.ics.uci.edu/ml/datasets/adult) in the Data/ repository. Although there are some predefined data and model classes (see examples/Example_notebook.ipynb), in this Readme, we define the data/model classes from scratch.
 
 
-1. Load data using ```pandas``` and specify column names, feature types, response name, and a list of immutable features,.
+Load data using ```pandas``` and specify column names, feature types, response name, and a list of immutable features,.
 
 ```Python
 import pandas as pd
@@ -52,7 +52,7 @@ df = df[features + target]
 
 ```
 
-Here we scale the continuous features between 0 and 1 and encode the categorical features using one-hot encoding (drop the first level).
+Using ```sklearn```, scale the continuous features between 0 and 1 and encode the categorical features using one-hot encoding (drop the first level).
 
 ```Python
 from sklearn import preprocessing
@@ -103,7 +103,7 @@ for immutable in immutable_features:
 
 ```
 
-Create data object to feed into MCCE method
+Create data object to pass to MCCE method
 
 ```Python
 class Dataset():
@@ -173,8 +173,6 @@ test_auc = metrics.auc(fpr, tpr)
 
 model_prediction = clf.predict(X)
 
-print(f"The out-of-sample AUC is {round(test_auc, 2)}")
-
 ```
 
 Decide which observations to generate counterfactual explanations for.
@@ -190,22 +188,18 @@ test_factual = factuals.iloc[:5]
 ```
 
 
-Use MCCE to generate counterfactual explanations
+Use ```MCCE``` to generate counterfactual explanations
 
 ```Python
 from mcce import MCCE
 
-mcce = MCCE(dataset=dataset,
-            model=ml_model)
+mcce = MCCE(dataset, ml_model)
 
-print("Fit trees")
-mcce.fit(df.drop(target, axis=1), dtypes)
+mcce.fit(df.drop(target, axis=1), dtypes) # remove the response from training data set
 
-print("Sample observations for the specific test observations")
-cfs = mcce.generate(test_factual.drop(target, axis=1), k=100)
+cfs = mcce.generate(test_factual.drop(target, axis=1), k=100) # sample 100 times per node
 
-print("Process the sampled observations")
-mcce.postprocess(cfs=cfs, test_factual=test_factual, cutoff=0.5)
+mcce.postprocess(cfs, test_factual, cutoff=0.5) # predicted >= 0.5 is considered positive; < 0.5 is negative
 
 ```
 
@@ -216,7 +210,6 @@ cfs = mcce.results_sparse
 cfs['income'] = test_factual['income']
 
 # invert the features to their original form
-print("Original factuals:")
 decoded_factuals = dataset.inverse_transform(test_factual,
                                              scaler, 
                                              encoder, 
@@ -248,7 +241,6 @@ print(decoded_factuals)
 Print counterfactual explanations values for five test observations
 
 ```Python
-
 decoded_cfs = dataset.inverse_transform(cfs,
                                         scaler, 
                                         encoder, 
@@ -259,7 +251,7 @@ print(decoded_cfs)
 ```
 
 ```Python
-age  workclass    fnlwgt  education-num  marital-status  occupation  \
+    age  workclass    fnlwgt  education-num  marital-status  occupation  \
 0  39.0          0  175232.0           13.0               1           0   
 1  38.0          0   86643.0           16.0               2           0   
 2  53.0          0  184176.0            9.0               0           3   

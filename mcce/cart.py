@@ -40,6 +40,9 @@ class CARTMethod(Method):
         self.max_depth = max_depth
         self.random_state = random_state
 
+        # print(f"Max depth is: {self.max_depth}")
+        # print(f"Minibucket is {self.minibucket}")
+
         if self.dtype in CAT_COLS_DTYPES:
             self.cart = DecisionTreeClassifier(min_samples_leaf=self.minibucket, max_depth=self.max_depth, random_state=self.random_state)
         if self.dtype in NUM_COLS_DTYPES:
@@ -59,18 +62,15 @@ class CARTMethod(Method):
         Returns
         -------
         """
-        # print(X_df.columns)
         X_df, y_df = self.prepare_dfs(X_df=X_df, y_df=y_df, normalise_num_cols=False, one_hot_cat_cols=False)
         
         self.X_df_after_one_hot = X_df
-        # print(X_df.dtypes)
 
         if self.dtype in NUM_COLS_DTYPES:
             self.y_real_min, self.y_real_max = np.min(y_df), np.max(y_df)
 
         X = X_df.to_numpy()
         y = y_df.to_numpy()
-        # print(X)
         self.cart.fit(X, y)
 
         # save the y distribution wrt trained tree nodes

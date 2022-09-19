@@ -152,7 +152,7 @@ class MCCE:
             # initialise the method
             col_method = METHODS_MAP[self.method[col]](dtype=self.df_dtypes[col],
                                                        minibucket=5,
-                                                       max_depth=2, 
+                                                       max_depth=None, 
                                                        random_state=self.seed)
             
             # fit the method
@@ -165,14 +165,6 @@ class MCCE:
                 self.trees[col] = col_method.leaves_y_dict
                 self.fitted_model[col] = col_method.fitted_model
             
-                
-            # if col == 'fnlwgt':
-                # print(df[col_predictors])
-                # print("\n")
-                # print(df[col])
-                # print(df[col_predictors].dtypes)
-                # print(col_method.leaves_y_dict)
-
             self.saved_methods[col] = col_method
 
     def generate(self, 

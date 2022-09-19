@@ -30,9 +30,8 @@ def distance(cfs,
     fact.sort_index(inplace=True)
     
     cont_feat = dataset.continuous
-    cat_feat = dataset.categorical
+    cat_feat = dataset.categorical    
     cat_feat_encoded = dataset.encoder.get_feature_names(dataset.categorical)
-
 
     if higher_card:
         cf_inverse_transform = dataset.inverse_transform(cfs.copy())
@@ -40,7 +39,6 @@ def distance(cfs,
 
         cfs_categorical = cf_inverse_transform[cat_feat].sort_index().to_numpy()
         factual_categorical = fact_inverse_transform[cat_feat].sort_index().to_numpy()
-    
 
     else:
         cfs_categorical = cfs[cat_feat_encoded].sort_index().to_numpy()
@@ -86,7 +84,6 @@ def feasibility(cfs,
     """
     
     nbrs = NearestNeighbors(n_neighbors=5).fit(df[cols].values)
-
     results = []
     for _, row in cfs[cols].iterrows():
         knn = nbrs.kneighbors(row.values.reshape((1, -1)), 5, return_distance=True)[0]

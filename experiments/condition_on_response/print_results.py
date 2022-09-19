@@ -109,8 +109,6 @@ test_factual = factuals.iloc[:n_test]
 
 all_results = pd.DataFrame()
 for method in ['mcce']:
-    print(f"Calculating results for {method}")
-
     if method == 'mcce':
         try:
             cfs = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_k_several_n_{n_test}_{device}.csv"), index_col=0)
@@ -118,9 +116,12 @@ for method in ['mcce']:
             print(f"No {method} results saved for n_test {n_test} in {path}")
             continue
     
-    for k in [5, 10, 25, 50, 100, 250, 500, 750, 1000, 2000, 3000, 5000, 10000, 25000]:
+    for k in [5, 10, 25, 50, 100, 500, 1000, 5000, 10000, 25000]:
 
         df_cfs = cfs[cfs['k'] == k].drop(['method',	'data'], axis=1)
+        # In case the script was accidentally run twice, we drop the duplicate indices per method
+        df_cfs = df_cfs[~df_cfs.index.duplicated(keep='first')]
+    
         df_cfs.sort_index(inplace=True)
         if dataset.target not in df_cfs.columns:
             df_cfs = df_cfs.join(test_factual[dataset.target])
@@ -147,7 +148,10 @@ for method in ['mcce']:
             distances.set_index(non_nan_idx, inplace=True)
             results = pd.concat([results, distances], axis=1)
 
-            results['feasibility'] = feasibility(counterfactuals_without_nans, factual_without_nans, dataset.df.columns)
+            # feasibility
+            feas_col = dataset.df.columns.to_list()
+            feas_col.remove(dataset.target)
+            results['feasibility'] = feasibility(counterfactuals_without_nans, factual_without_nans, feas_col)
             
             # violation
             violations = []
@@ -168,7 +172,6 @@ for method in ['mcce']:
             results['generate (seconds)'] = df_cfs['generate (seconds)'].mean()
             results['postprocess (seconds)'] = df_cfs['postprocess (seconds)'].mean()
             
-
             all_results = pd.concat([all_results, results], axis=0)
 
 cols = ['k', 'L0', 'L1', 'feasibility', 'success', 'violation', 'time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']
@@ -177,8 +180,6 @@ temp = all_results[cols]
 print(f"Writing results for {data_name} {device}")
 to_write_mean = temp[['k', 'L0', 'L1', 'feasibility', 'violation', 'success', 'time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)' ]].groupby(['k']).mean()
 to_write_mean.reset_index(inplace=True)
-print(to_write_mean)
-
 
 to_write_sd = temp[[ 'k', 'L0', 'L1', 'feasibility', 'violation', 'success']].groupby(['k']).std()
 to_write_sd.reset_index(inplace=True)
@@ -212,6 +213,6 @@ to_write["L1"] = to_write["L1"] + " (" + to_write["L1_sd"] + ")"
 to_write["feasibility"] = to_write["feasibility"] + " (" + to_write["feasibility_sd"] + ")"
 to_write["violation"] = to_write["violation"] + " (" + to_write["violation_sd"] + ")"
 
-print(to_write[['method', 'k', 'L0', 'L1', 'feasibility', 'violation', 'success', 'CE_N', 'time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']].to_string())
-print("\n")
+# print(to_write[['method', 'k', 'L0', 'L1', 'feasibility', 'violation', 'success', 'CE_N', 'time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']].to_string())
+# print("\n")
 print(to_write[['k', 'L0', 'L1', 'feasibility', 'violation', 'CE_N', 'time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']].to_latex(index=False))

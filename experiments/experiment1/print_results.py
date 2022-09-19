@@ -135,6 +135,10 @@ for method in ['cchvae', 'cem-vae', 'revise', 'clue', 'crud', 'face', 'mcce']:
             continue
     
     df_cfs = cfs[cfs['method'] == method].drop(['method',	'data'], axis=1)
+    
+    # In case the script was accidentally run twice, we drop the duplicate indices per method
+    df_cfs = df_cfs[~df_cfs.index.duplicated(keep='first')]
+    
     df_cfs.sort_index(inplace=True)
     if dataset.target not in df_cfs.columns:
         df_cfs = df_cfs.join(test_factual[dataset.target])
@@ -160,7 +164,10 @@ for method in ['cchvae', 'cem-vae', 'revise', 'clue', 'crud', 'face', 'mcce']:
         distances.set_index(non_nan_idx, inplace=True)
         results = pd.concat([results, distances], axis=1)
 
-        results['feasibility'] = feasibility(counterfactuals_without_nans, factual_without_nans, dataset.df.columns)
+        # feasibility
+        feas_col = dataset.df.columns.to_list()
+        feas_col.remove(dataset.target)
+        results['feasibility'] = feasibility(counterfactuals_without_nans, factual_without_nans, feas_col)
         
         # violation
         violations = []
@@ -228,6 +235,6 @@ to_write["L1"] = to_write["L1"] + " (" + to_write["L1_sd"] + ")"
 to_write["feasibility"] = to_write["feasibility"] + " (" + to_write["feasibility_sd"] + ")"
 to_write["violation"] = to_write["violation"] + " (" + to_write["violation_sd"] + ")"
 
-print(to_write[['method', 'L0', 'L1', 'feasibility', 'violation', 'success', 'CE_N', 'time (seconds)']].to_string())
-print("\n")
+# print(to_write[['method', 'L0', 'L1', 'feasibility', 'violation', 'success', 'CE_N', 'time (seconds)']].to_string())
+# print("\n")
 print(to_write[['method', 'L0', 'L1', 'feasibility', 'violation', 'success', 'CE_N', 'time (seconds)']].to_latex(index=False))

@@ -216,13 +216,10 @@ for k in [5, 10, 25, 50, 100, 250, 500, 750, 1000, 2000, 3000, 5000, 10000, 2500
 
     results['prediction'] = ml_model.predict(results_copy)
 
-    # results[y_col] = test_factual[y_col]
-
     cols = ['data', 'method', 'prediction', 'k'] + dataset_mcce.categorical_encoded + dataset_mcce.continuous + ['time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']
     results.sort_index(inplace=True)
 
     path_all = os.path.join(path, f"{data_name}_mcce_results_k_several_n_{n_test}_{device}.csv")
-    print(path_all)
     if(os.path.exists(path_all)):
         results[cols].to_csv(path_all, mode='a', header=False)
     else:

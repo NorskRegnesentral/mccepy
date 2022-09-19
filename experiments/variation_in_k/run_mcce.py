@@ -108,7 +108,7 @@ mcce = MCCE(dataset=dataset,
 mcce.fit(df.drop(dataset.target, axis=1), dtypes)
 time_fit = time.time()
 
-for k in [100, 500, 1000, 5000, 10000, 25000, 50000, 100000]:
+for k in [5, 10, 25, 50, 100, 500, 1000, 5000, 10000, 25000]: # , 50000, 100000
     print(f"K: {k}")
     
     time_k_start = time.time()

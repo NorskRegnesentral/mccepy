@@ -135,7 +135,9 @@ if len(counterfactuals_without_nans) > 0:
     results = pd.concat([results, distances], axis=1)
 
     # calculate feasibility
-    results['feasibility'] = feasibility(counterfactuals_without_nans, factual_without_nans, dataset.df.columns)
+    feas_col = dataset.df.columns.to_list()
+    feas_col.remove(dataset.target)
+    results['feasibility'] = feasibility(counterfactuals_without_nans, factual_without_nans, feas_col)
     
     # calculate violation
     violations = []

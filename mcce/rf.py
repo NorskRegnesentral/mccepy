@@ -30,9 +30,10 @@ class RandomForestModel():
         self._feature_input_order = data.continuous + data.categorical_encoded
 
         param = {
-            "max_depth": None,  # determines how deep the tree can go
-            "n_estimators": 5, # number of trees
-            "min_samples_split": 3 # number of features to consider at each split
+            "max_depth": None,  # The maximum depth of the tree. If None, then nodes are expanded until 
+                                # all leaves are pure or until all leaves contain less than min_samples_split samples.
+            "n_estimators": 200, # The number of trees in the forest.
+            "min_samples_split": 3 # The minimum number of samples required to split an internal node:
         }
         self._mymodel = RandomForestClassifier(**param)
         self._mymodel.fit(

@@ -52,13 +52,19 @@ parser.add_argument(
     default='cuda',
     help="Whether the CARLA methods were trained with a GPU (default) or CPU.",
 )
-
+parser.add_argument(
+    "-MJ",
+    "--MJ",
+    action='store_true',  # default is False
+    help="Whether to train the prediction model from scratch or not. Default will not train.",
+)
 args = parser.parse_args()
 
 path = args.path
 data_name = args.dataset
 n_test = args.number_of_samples
 force_train = args.force_train
+MJ = args.MJ
 device = args.device # cuda # cpu
 
 print(f"Load {data_name} data set")
@@ -111,9 +117,9 @@ all_results = pd.DataFrame()
 for method in ['mcce']:
     if method == 'mcce':
         try:
-            cfs = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_k_several_n_{n_test}_{device}.csv"), index_col=0)
+            cfs = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_k_several_n_{n_test}_{device}_MJ_{MJ}.csv"), index_col=0)
         except:
-            print(f"No {method} results saved for n_test {n_test} in {path}")
+            print(f"No {method} results saved for n_test {n_test} in {path} with postprocessing MJ {MJ}")
             continue
     
     for k in [5, 10, 25, 50, 100, 500, 1000, 5000, 10000, 25000]:
@@ -142,6 +148,7 @@ for method in ['mcce']:
             results['method'] = method
             results['data'] = data_name
             results['k'] = k
+            results['n_positive'] = counterfactuals_without_nans['n_positive']
             
             # distance
             distances = pd.DataFrame(distance(counterfactuals_without_nans, factual_without_nans, dataset, higher_card=False))
@@ -174,21 +181,21 @@ for method in ['mcce']:
             
             all_results = pd.concat([all_results, results], axis=0)
 
-cols = ['k', 'L0', 'L1', 'feasibility', 'success', 'violation', 'time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']
+cols = ['k', 'n_positive', 'L0', 'L1', 'feasibility', 'success', 'violation', 'time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']
 temp = all_results[cols]
 
 print(f"Writing results for {data_name} {device}")
-to_write_mean = temp[['k', 'L0', 'L1', 'feasibility', 'violation', 'success', 'time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)' ]].groupby(['k']).mean()
+to_write_mean = temp[['k', 'n_positive', 'L0', 'L1', 'feasibility', 'violation', 'success', 'time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)' ]].groupby(['k']).mean()
 to_write_mean.reset_index(inplace=True)
 
-to_write_sd = temp[[ 'k', 'L0', 'L1', 'feasibility', 'violation', 'success']].groupby(['k']).std()
+to_write_sd = temp[['k', 'n_positive', 'L0', 'L1', 'feasibility', 'violation', 'success']].groupby(['k']).std()
 to_write_sd.reset_index(inplace=True)
-to_write_sd.rename(columns={'L0': 'L0_sd', 'L1': 'L1_sd', 'feasibility': 'feasibility_sd', 'violation': 'violation_sd', 'success': 'success_sd'}, inplace=True)
+to_write_sd.rename(columns={'n_positive': 'n_positive_sd', 'L0': 'L0_sd', 'L1': 'L1_sd', 'feasibility': 'feasibility_sd', 'violation': 'violation_sd', 'success': 'success_sd'}, inplace=True)
 
 CE_N = temp.groupby(['k']).size().reset_index().rename(columns={0: 'CE_N'})
 
-to_write = pd.concat([to_write_mean, to_write_sd[['L0_sd', 'L1_sd', 'feasibility_sd', 'violation_sd', 'success_sd']], CE_N.CE_N], axis=1)
-to_write = to_write[['k', 'L0', 'L0_sd', 'L1', 'L1_sd', 'feasibility', 'feasibility_sd', 'violation', 'violation_sd', 'success', 'CE_N', 'time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']]
+to_write = pd.concat([to_write_mean, to_write_sd[['n_positive_sd', 'L0_sd', 'L1_sd', 'feasibility_sd', 'violation_sd', 'success_sd']], CE_N.CE_N], axis=1)
+to_write = to_write[['k', 'n_positive', 'n_positive_sd',  'L0', 'L0_sd', 'L1', 'L1_sd', 'feasibility', 'feasibility_sd', 'violation', 'violation_sd', 'success', 'CE_N', 'time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']]
 
 # Fix method names
 to_write['method'] = 'MCCE'
@@ -204,7 +211,7 @@ to_write[num_feat] = to_write[num_feat].astype(np.int64)
 
 to_write = to_write.round(2)
 
-cols = ['L0', 'L0_sd', 'L1', 'L1_sd', 'feasibility', 'feasibility_sd', 'violation', 'violation_sd', 'success']
+cols = ['n_positive', 'L0', 'L0_sd', 'L1', 'L1_sd', 'feasibility', 'feasibility_sd', 'violation', 'violation_sd', 'success']
 to_write[cols] = to_write[cols].astype(str)
 
 # Add the standard deviations in original columns
@@ -212,7 +219,8 @@ to_write["L0"] = to_write["L0"] + " (" + to_write["L0_sd"] + ")"
 to_write["L1"] = to_write["L1"] + " (" + to_write["L1_sd"] + ")"
 to_write["feasibility"] = to_write["feasibility"] + " (" + to_write["feasibility_sd"] + ")"
 to_write["violation"] = to_write["violation"] + " (" + to_write["violation_sd"] + ")"
+# to_write["n_positive"] = to_write["n_positive"] + " (" + to_write["n_positive_sd"] + ")"
 
 # print(to_write[['method', 'k', 'L0', 'L1', 'feasibility', 'violation', 'success', 'CE_N', 'time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']].to_string())
 # print("\n")
-print(to_write[['k', 'L0', 'L1', 'feasibility', 'violation', 'CE_N', 'time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']].to_latex(index=False))
+print(to_write[['k', 'L0', 'L1', 'feasibility', 'violation', 'CE_N', 'n_positive',  'time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']].to_latex(index=False))

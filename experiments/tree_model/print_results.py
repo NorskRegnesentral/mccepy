@@ -56,10 +56,10 @@ class RandomForestModel(MLModel):
         self._feature_input_order = self.data.continuous + encoded_features
 
         param = {
-            "max_depth": None,  # determines how deep the tree can go
-            "n_estimators": 200,
-            "min_samples_split": 3, # number of features to consider at each split
-            
+            "max_depth": None,  # The maximum depth of the tree. If None, then nodes are expanded until 
+                                # all leaves are pure or until all leaves contain less than min_samples_split samples.
+            "n_estimators": 200, # The number of trees in the forest.
+            "min_samples_split": 3 # The minimum number of samples required to split an internal node:
         }
         np.random.seed(1) # important to use np and not random with sklearn!
         self._mymodel = RandomForestClassifier(**param)
@@ -154,9 +154,13 @@ test_factual = factuals.iloc[:n_test]
 
 # Read results
 try:
-    df_cfs = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_tree_model_k_{k}_n_{n_test}_{device}.csv"), index_col=0)
+    cfs = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_tree_model_k_{k}_n_{n_test}_{device}.csv"), index_col=0)
 except:
     sys.exit(f"No MCCE results saved for {data_name}, k {k}, n_test {n_test}, and device {device} in {path}")
+
+df_cfs = cfs.drop(['method', 'data'], axis=1)
+# In case the script was accidentally run twice, we drop the duplicate indices per method
+df_cfs = df_cfs[~df_cfs.index.duplicated(keep='first')]
 df_cfs.sort_index(inplace=True)
     
 # Remove missing values
@@ -184,7 +188,9 @@ if len(counterfactuals_without_nans) > 0:
     results = pd.concat([results, distances], axis=1)
 
     # calculate feasibility
-    results['feasibility'] = feasibility(counterfactuals_without_nans, factual_without_nans, dataset.df.columns)
+    feas_col = dataset.df.columns.to_list()
+    feas_col.remove(dataset.target)
+    results['feasibility'] = feasibility(counterfactuals_without_nans, factual_without_nans, feas_col)
     
     # calculate violation
     violations = []
@@ -251,6 +257,6 @@ to_write["L1"] = to_write["L1"] + " (" + to_write["L1_sd"] + ")"
 to_write["feasibility"] = to_write["feasibility"] + " (" + to_write["feasibility_sd"] + ")"
 to_write["violation"] = to_write["violation"] + " (" + to_write["violation_sd"] + ")"
 
-print(to_write[['method', 'L0', 'L1', 'feasibility', 'violation', 'success', 'CE_N', 'time (seconds)']].to_string())
-print("\n")
+# print(to_write[['method', 'L0', 'L1', 'feasibility', 'violation', 'success', 'CE_N', 'time (seconds)']].to_string())
+# print("\n")
 print(to_write[['method', 'L0', 'L1', 'feasibility', 'violation', 'success', 'CE_N', 'time (seconds)']].to_latex(index=False))

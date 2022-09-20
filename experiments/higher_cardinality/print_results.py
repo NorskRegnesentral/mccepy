@@ -108,9 +108,10 @@ try:
     cfs = pd.read_csv(os.path.join(path, f"adult_mcce_results_higher_cardinality_k_{k}_n_{n_test}_{device}.csv"), index_col=0)
 except:
     sys.exit(f"No MCCE results saved for k {k} and n_test {n_test} in {path}")
-    
 
 df_cfs = cfs.drop(['method', 'data'], axis=1)
+# In case the script was accidentally run twice, we drop the duplicate indices per method
+df_cfs = df_cfs[~df_cfs.index.duplicated(keep='first')]
 df_cfs.sort_index(inplace=True)
 
 # remove missing values
@@ -192,7 +193,7 @@ to_write["L1"] = to_write["L1"] + " (" + to_write["L1_sd"] + ")"
 to_write["feasibility"] = to_write["feasibility"] + " (" + to_write["feasibility_sd"] + ")"
 to_write["violation"] = to_write["violation"] + " (" + to_write["violation_sd"] + ")"
 
-print(to_write.round(2).to_string())
-print("\n")
+# print(to_write.round(2).to_string())
+# print("\n")
 print(to_write[['method', 'L0', 'L1', 'feasibility', 'violation', 'success', 'CE_N', 'time (seconds)']].to_latex(index=False))
 

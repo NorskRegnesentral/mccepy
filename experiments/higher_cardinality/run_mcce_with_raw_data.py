@@ -10,7 +10,7 @@ import pandas as pd
 from sklearn import preprocessing
 from mcce.mcce import MCCE
 
-# must do pip install . in CARLA_version_2 directory
+# must do pip install . in CARLA_version_3 directory
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -102,7 +102,7 @@ dataset = CsvCatalog(file_path="Data/adult_data.csv",
                      categorical=categorical,
                      immutables=immutable,
                      target='income',
-                     encoding_method=encoding_method#"OneHot_drop_first", # New!
+                     encoding_method=encoding_method
                      )
 
 print("Fit predictive model")
@@ -149,19 +149,32 @@ print("Process sampled observations")
 mcce.postprocess(cfs, test_factual, cutoff=0.5, higher_cardinality=True)
 time_postprocess = time.time()
 
-print("Save results")
-mcce.results_sparse['time (seconds)'] = time.time() - start
-mcce.results_sparse['fit (seconds)'] = time_fit - start
-mcce.results_sparse['generate (seconds)'] = time_generate - time_fit
-mcce.results_sparse['postprocess (seconds)'] = time_postprocess - time_generate
+results = mcce.results_sparse
+
+results['time (seconds)'] = time.time() - start
+results['fit (seconds)'] = time_fit - start
+results['generate (seconds)'] = time_generate - time_fit
+results['postprocess (seconds)'] = time_postprocess - time_generate
+
+results['data'] = 'adult'
+results['method'] = 'mcce'
+results['n_test'] = n_test
+results['k'] = k
+results['n_positive'] = results['N']
 
 results = mcce.results_sparse
 results['data'] = 'adult'
 results['method'] = 'mcce'
 results[y_col] = test_factual[y_col]
 
-# cols = ['data', 'method'] + cat_feat_encoded.tolist() + cont_feat + [y_col] + ['time (seconds)']
-cols = ['data', 'method'] + cat_feat_encoded.tolist() + cont_feat + [y_col] + ['time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']
+# Get the fitted tree depth for each mutable feature
+# tree_depth_cols = []
+# for x in dataset.feature_order:
+#     if x not in dataset.immutables:
+#         tree_depth_cols.append(x + "_tree_depth")
+#         results[x + "_tree_depth"] = mcce.fitted_model[x].get_depth()
+
+cols = ['data', 'method', 'n_test', 'k', 'n_positive'] + cat_feat_encoded.tolist() + cont_feat + ['time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']
 results.sort_index(inplace=True)
 
 results[cols].to_csv(os.path.join(path, f"adult_mcce_results_higher_cardinality_k_{k}_n_{n_test}_{device}.csv"))

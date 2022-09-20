@@ -15,7 +15,7 @@ from carla.models.negative_instances import predict_negative_instances
 from carla import MLModel
 
 from mcce.mcce import MCCE
-# must do pip install . in CARLA_version_2 directory
+# must do pip install . in CARLA_version_3 directory
 
 # Fit predictive model that takes into account MLModel (a CARLA class!)
 class RandomForestModel(MLModel):
@@ -53,9 +53,10 @@ class RandomForestModel(MLModel):
         self._feature_input_order = self.data.continuous + encoded_features
 
         param = {
-            "max_depth": None,  # determines how deep the tree can go
-            "n_estimators": 200,
-            "min_samples_split": 3 # number of features to consider at each split
+            "max_depth": None,  # The maximum depth of the tree. If None, then nodes are expanded until 
+                                # all leaves are pure or until all leaves contain less than min_samples_split samples.
+            "n_estimators": 200, # The number of trees in the forest.
+            "min_samples_split": 3 # The minimum number of samples required to split an internal node:
         }
         np.random.seed(1)  # important to use np and not random with sklearn!
         self._mymodel = RandomForestClassifier(**param)
@@ -167,20 +168,27 @@ mcce.postprocess(cfs, test_factual, cutoff=0.5, higher_cardinality=False)
 time_postprocess = time.time()
 end = time.time() - start
 
-# Timings
-mcce.results_sparse['time (seconds)'] = time.time() - start
-mcce.results_sparse['fit (seconds)'] = time_fit - start
-mcce.results_sparse['generate (seconds)'] = time_generate - time_fit
-mcce.results_sparse['postprocess (seconds)'] = time_postprocess - time_generate
-
 results = mcce.results_sparse
-results['data'] = 'adult'
-results['method'] = 'mcce'
-results[y_col] = test_factual[y_col]
 
-print("Save results")
-# cols = ['data', 'method'] + cat_feat_encoded.tolist() + cont_feat + [y_col] + ['time (seconds)']
-cols = ['data', 'method'] + cat_feat_encoded.tolist() + cont_feat + [y_col] + ['time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']
+results['time (seconds)'] = time.time() - start
+results['fit (seconds)'] = time_fit - start
+results['generate (seconds)'] = time_generate - time_fit
+results['postprocess (seconds)'] = time_postprocess - time_generate
+
+results['data'] = data_name
+results['method'] = 'mcce'
+results['n_test'] = n_test
+results['k'] = k
+results['n_positive'] = results['N']
+
+# Get the fitted tree depth for each mutable feature
+# tree_depth_cols = []
+# for x in dataset.feature_order:
+#     if x not in dataset.immutables:
+#         tree_depth_cols.append(x + "_tree_depth")
+#         results[x + "_tree_depth"] = mcce.fitted_model[x].get_depth()
+
+cols = ['data', 'method', 'n_test', 'k', 'n_positive'] + cat_feat_encoded.tolist() + cont_feat + ['time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']
 results.sort_index(inplace=True)
 
 results[cols].to_csv(os.path.join(path, f"{data_name}_mcce_results_tree_model_k_{k}_n_{n_test}_{device}.csv"))

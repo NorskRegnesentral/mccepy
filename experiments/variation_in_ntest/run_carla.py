@@ -150,7 +150,6 @@ for data_name in args.dataset:
         df_cfs.insert(0, 'method', 'cchvae')
         df_cfs.insert(1, 'data', data_name)
         
-        
         df_cfs['time (seconds)'] = (fitting_end - fitting_start) + (sampling_end - sampling_start)
         df_cfs['fitting (seconds)'] = (fitting_end - fitting_start)
         df_cfs['sampling (seconds)'] = (sampling_end - sampling_start)
@@ -159,7 +158,6 @@ for data_name in args.dataset:
 
         path_all = os.path.join(path, f"{data_name}_carla_results_n_several_{device}.csv")
         
-        print(path_all)
         if(os.path.exists(path_all)):
             df_cfs.to_csv(path_all, mode='a', header=False)
         else:

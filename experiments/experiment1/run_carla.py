@@ -11,7 +11,6 @@ import torch
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-path = 'Final_results_n_1000'
 # must do pip install . in CARLA_version_3 directory
 
 def save_csv(df, data_name):
@@ -24,6 +23,13 @@ def save_csv(df, data_name):
 
 
 parser = argparse.ArgumentParser(description="Fit various recourse methods from CARLA.")
+parser.add_argument(
+    "-p",
+    "--path",
+    type=str,
+    required=True,
+    help="Path where results are saved",
+)
 parser.add_argument(
     "-d",
     "--dataset",
@@ -71,6 +77,7 @@ parser.add_argument(
 args = parser.parse_args()
 n_test = args.number_of_samples
 force_train = args.force_train
+path = args.path
 
 for data_name in args.dataset:
     print(f"Training data set: {data_name}")

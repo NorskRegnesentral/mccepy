@@ -135,7 +135,6 @@ for method in ['cchvae', 'cem-vae', 'revise', 'clue', 'crud', 'face', 'mcce']:
             continue
     
     df_cfs = cfs[cfs['method'] == method].drop(['method',	'data'], axis=1)
-    
     # In case the script was accidentally run twice, we drop the duplicate indices per method
     df_cfs = df_cfs[~df_cfs.index.duplicated(keep='first')]
     

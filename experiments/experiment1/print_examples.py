@@ -249,7 +249,7 @@ to_write = pd.concat([s1, s3.sort_values('method'), s2])
 # Remove decimal point
 to_write[num_feat] = to_write[num_feat].astype(np.int64)
 
-print(to_write.to_string())
+# print(to_write.to_string())
 print(to_write.to_latex(index=False))  
  
 

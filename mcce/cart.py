@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import time
 from .method import Method
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 
@@ -90,20 +91,39 @@ class CARTMethod(Method):
         Returns
         -------
         """
+        generate_timings = {}
+        time_gen_1 = time.time()
         X_test_df, _ = self.prepare_dfs(X_df=X_test_df, normalise_num_cols=False, one_hot_cat_cols=True, fit=False)
+        time_gen_2 = time.time()
 
         # predict the leaves and for each leaf randomly sample from the observed values
         X_test = X_test_df.to_numpy()
         leaves_pred = self.cart.apply(X_test)
+        time_gen_3 = time.time()
         y_pred = np.zeros(len(leaves_pred), dtype=object)
 
         leaves_pred_index_df = pd.DataFrame({'leaves_pred': leaves_pred, 'index': range(len(leaves_pred))})
         leaves_pred_index_dict = leaves_pred_index_df.groupby('leaves_pred').apply(lambda x: x.to_numpy()[:, -1]).to_dict()
-        
+        time_gen_4 = time.time()
+
+        time_list = []
         for leaf, indices in leaves_pred_index_dict.items():
+            time_gen_5 = time.time()
             np.random.seed(0) # seed seed so we can reproduce MCCE results
             y_pred[indices] = np.random.choice(self.leaves_y_dict[leaf], size=len(indices), replace=True)
+            time_gen_6 = time.time()
+            time_list.append(time.time() - time_gen_5)
 
-        return y_pred
+        generate_timings['prepare_dfs'] = time_gen_2 - time_gen_1
+        generate_timings['apply_x_test'] = time_gen_3 - time_gen_2
+        generate_timings['groupby'] = time_gen_4 - time_gen_3
+        generate_timings['np.random.choice'] = time_gen_6 - time_gen_5
+        generate_timings['nb_unique_leaves'] = len(leaves_pred_index_dict.items())
+        generate_timings['average_random.choice'] = sum(time_list) / len(time_list)
+
+        generate_timings['nb_unique_leaves_times_random_choice'] = (sum(time_list) / len(time_list)) * len(leaves_pred_index_dict.items())
+        
+        # self.generate_timings = generate_timings
+        return y_pred, generate_timings
     
     

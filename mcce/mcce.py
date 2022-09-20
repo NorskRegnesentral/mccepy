@@ -1,8 +1,8 @@
 import re
 import sys
-import time
 import numpy as np
 import pandas as pd
+import time
 
 from .cart import CARTMethod
 from .sample import SampleMethod
@@ -143,6 +143,7 @@ class MCCE:
         self.saved_methods = {}
         self.trees = {}
         self.fitted_model = {}
+        self.predicted_leaves = {}
 
         # train
         self.predictor_matrix_columns = self.predictor_matrix.columns.to_numpy()
@@ -164,7 +165,8 @@ class MCCE:
             if self.method[col] == 'cart':
                 self.trees[col] = col_method.leaves_y_dict
                 self.fitted_model[col] = col_method.fitted_model
-            
+                self.predicted_leaves[col] = col_method.fitted_model.apply(df[col_predictors])
+
             self.saved_methods[col] = col_method
 
     def generate(self, 
@@ -196,21 +198,37 @@ class MCCE:
         # repeat 0 for mutable features k times
         synth_df_mutable = pd.DataFrame(data=np.zeros([self.k * n_test, self.n_mutable]), columns=self.mutable_features, index=synth_df.index)
 
+        generate_timings = {}
+
         synth_df = pd.concat([synth_df, synth_df_mutable], axis=1)
-        start_time = time.time()
         for col in self.mutable_features:
+            generate_timings[col] = {}
+            time_gen_1 = time.time()
             # reload the method
             col_method = self.saved_methods[col]
+            time_gen_2 = time.time()
+            
             # predict with the method
             col_predictors = self.predictor_matrix_columns[self.predictor_matrix.loc[col].to_numpy() == 1]
-            synth_df[col] = col_method.predict(synth_df[col_predictors])
+            time_gen_3 = time.time()
+            
+            synth_df[col], generate_timings[col] = col_method.predict(synth_df[col_predictors])
+            time_gen_4 = time.time()
+            
             # map dtype to original dtype
             synth_df[col] = synth_df[col].astype(self.df_dtypes[col])
-
-        self.total_generating_seconds = time.time() - start_time
+            time_gen_5 = time.time()
+            
+            # generate_timings[col]['load_model'] = time_gen_2 - time_gen_1
+            # generate_timings[col]['predictor_matrix_loc'] = time_gen_3 - time_gen_2
+            # generate_timings[col]['predict'] = time_gen_4 - time_gen_3
+            # generate_timings[col]['astype'] = time_gen_5 - time_gen_4
+            
 
         # return in same ordering as original dataframe
         synth_df = synth_df[test_factual.columns]
+        self.synth_df = synth_df
+        # self.generate_timings = generate_timings
         return synth_df
 
     def postprocess(self, 
@@ -237,14 +255,24 @@ class MCCE:
         -------
         
         """
-        
-        cols = cfs.columns
+        generate_timings = {}
+
+        cols = cfs.columns.to_list()
         self.cutoff = cutoff
 
         # Predict response of generated data
+        time_gen_1 = time.time()
         cfs_positive = cfs[self.model.predict(cfs) >= cutoff]
+        time_gen_2 = time.time()
+        
+        # print(cfs_positive.shape[0])
+        cfs_positive = cfs_positive.reset_index()
+        cfs_positive = cfs_positive.drop_duplicates()
+        cfs_positive = cfs_positive.set_index(cfs_positive['index'])
+        cfs_positive = cfs_positive.drop(columns=['index'])
+        # print(cfs_positive.shape[0])
 
-        self.cfs_positive = cfs_positive.shape
+        self.cfs_positive = cfs_positive
         
         # Duplicate original test observations N times where N is number of positive counterfactuals
         n_counterfactuals = cfs_positive.groupby(cfs_positive.index).size()
@@ -252,23 +280,29 @@ class MCCE:
 
         fact_repeated = test_factual.copy()
 
+        time_gen_3 = time.time()
+        
         fact_repeated = fact_repeated.join(n_counterfactuals)
         fact_repeated.dropna(inplace = True)
 
         fact_repeated = fact_repeated.reindex(fact_repeated.index.repeat(fact_repeated.N))
         fact_repeated.drop(['N'], axis=1, inplace=True)
-
+        time_gen_4 = time.time()
+        
         self.fact_repeated = fact_repeated
 
         self.results = self.calculate_metrics(cfs=cfs_positive, 
                                               test_factual=self.fact_repeated, 
                                               higher_cardinality=higher_cardinality) 
-
+        time_gen_5 = time.time()
+        
         # Find the best row for each test obs
-        time1 = time.time()
         results_sparse = pd.DataFrame(columns=self.results.columns)
 
+        timings_list = []
         for idx in list(set(self.results.index)):
+            time_gen_6 = time.time()
+        
             idx_df = self.results.loc[idx]
             if(isinstance(idx_df, pd.DataFrame)): # If you have multiple rows
                 sparse = min(idx_df.L0) # 1) find least # features changed
@@ -278,13 +312,132 @@ class MCCE:
 
             else: # if you have only one row - return that row
                 close_df = idx_df.to_frame().T
+            time_gen_7 = time.time()
+            timings_list.append(time_gen_7 - time_gen_6)
                 
             results_sparse = pd.concat([results_sparse, close_df], axis=0)
         
-        time2 = time.time()
-        self.find_best_cpu_time = time2 - time1
+        generate_timings['predict'] = time_gen_2 - time_gen_1
+        generate_timings['fact_repeated'] = time_gen_4 - time_gen_3
+        generate_timings['calc_metrics'] = time_gen_5 - time_gen_4
+        generate_timings['avg_for_loop'] = sum(timings_list) / len(timings_list)
+        # generate_timings['length_of_loop'] = len(list(set(self.results.index)))
+        generate_timings['for_loop'] = (sum(timings_list) / len(timings_list)) * len(list(set(self.results.index)))
+        
+        
+        # Add the number of positive instances per test observation
+        results_sparse = results_sparse.merge(n_counterfactuals, left_index=True, right_index=True)
+        cols = cols + ['N']
+        self.results_sparse = results_sparse[cols]
+        self.generate_timings = generate_timings
+
+
+
+    def postprocess_MJ(self, 
+                       cfs, 
+                       test_factual, 
+                       cutoff=0.5, 
+                       higher_cardinality=False):
+        """
+        Postprocess the sampled observations to get exactly one counterfactual explanation per test observation.
+
+        Parameters
+        ----------
+        cfs : pd.DataFrame
+            DataFrame containing the potential counterfactual explanations.
+        test_factual : pd.DataFrame
+            DataFrame containing the test observations to generate counterfactuals for.
+        cutoff : float, default: 0.5
+            Cutoff value that indicates which observations get a positive/desired response and which do not. 
+            Observations with a prediction greater than this cutoff value are considered "positive"
+            and those with a lower prediction are considered "negative".
+        higher_cardinality : bool, default: False
+            Whether the categorical features are allowed to have more than two levels each. 
+        Returns
+        -------
+        
+        """
+        generate_timings = {}
+
+        cols = cfs.columns.to_list()
+        self.cutoff = cutoff
+
+        # Predict response of generated data
+        cfs_positive = cfs # cfs[self.model.predict(cfs) >= cutoff]
+
+        # self.cfs_positive = cfs.shape[0] # cfs_positive.shape
+        time_gen_1 = time.time()
+         
+        # Duplicate original test observations N times where N is number of positive counterfactuals
+        n_counterfactuals = cfs_positive.groupby(cfs_positive.index).size()
+        n_counterfactuals = pd.DataFrame(n_counterfactuals, columns = ['N'])
+
+        fact_repeated = test_factual.copy()
+
+        time_gen_2 = time.time()
+        
+        fact_repeated = fact_repeated.join(n_counterfactuals)
+        fact_repeated.dropna(inplace = True)
+
+        fact_repeated = fact_repeated.reindex(fact_repeated.index.repeat(fact_repeated.N))
+        fact_repeated.drop(['N'], axis=1, inplace=True)
+        time_gen_3 = time.time()
+        
+        self.fact_repeated = fact_repeated
+
+        self.results = self.calculate_metrics(cfs=cfs_positive, 
+                                              test_factual=self.fact_repeated, 
+                                              higher_cardinality=higher_cardinality) 
+
+        time_gen_4 = time.time()
+
+        # Find the best row for each test obs
+        results_sparse = pd.DataFrame(columns=self.results.columns)
+
+        timings_list = []
+        predict_all = 0
+        for idx in list(set(self.results.index)):
+            time_gen_6 = time.time()
+            close_df = None
+            idx_df = self.results.loc[idx]
+            if(isinstance(idx_df, pd.DataFrame)): # If you have multiple rows
+                # Find all L0
+                L0_list = np.sort(idx_df.L0.unique())
+                for L0 in L0_list:
+                    sparse_df = idx_df[idx_df.L0 == L0]
+
+                    predict_1 = time.time()
+
+                    sparse_df = sparse_df[self.model.predict(sparse_df) >= cutoff]
+                    predict_all = predict_all + (time.time() - predict_1)
+                    if(sparse_df.shape[0] > 0): # If you have multiple rows
+                        closest = min(sparse_df.L1)
+                        close_df = sparse_df[sparse_df.L1 == closest].head(1)
+                        break
+
+            else: # if you have only one row - return that row
+                close_df = idx_df.to_frame().T
+            
+            if close_df is not None:
+                results_sparse = pd.concat([results_sparse, close_df], axis=0)
+
+            time_gen_7 = time.time()
+            timings_list.append(time_gen_7 - time_gen_6)
+
+        # Add the number of positive instances per test observation
+        results_sparse = results_sparse.merge(n_counterfactuals, left_index=True, right_index=True)
+        cols = cols + ['N']
         self.results_sparse = results_sparse[cols]
 
+        generate_timings['predict'] = predict_all
+        generate_timings['fact_repeated'] = time_gen_3 - time_gen_2
+        generate_timings['calc_metrics'] = time_gen_4 - time_gen_3
+        generate_timings['avg_for_loop'] = sum(timings_list) / len(timings_list)
+        generate_timings['for_loop'] = (sum(timings_list) / len(timings_list)) * len(list(set(self.results.index)))
+        
+        # generate_timings['length_of_loop'] = len(list(set(self.results.index)))
+       
+        self.generate_timings = generate_timings
 
     def calculate_metrics(self, 
                           cfs, 
@@ -310,7 +463,6 @@ class MCCE:
         
         """
 
-        time1 = time.time()
         features = cfs.columns.to_list()
         cfs.sort_index(inplace=True)
 
@@ -322,8 +474,6 @@ class MCCE:
         
         distances = pd.DataFrame(distance(counterfactuals, factual, self.dataset, higher_cardinality), index=factual.index)
         cfs_metrics = pd.concat([cfs_metrics, distances], axis=1)
-        time2 = time.time()
-        self.distance_cpu_time = time2 - time1
 
         return cfs_metrics
     

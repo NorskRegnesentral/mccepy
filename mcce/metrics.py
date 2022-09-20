@@ -14,7 +14,7 @@ def distance(cfs,
         pd.DataFrame containing the potential counterfactuals (in their standardized/encoded versions).
     fact : pd.DataFrame
         pd.DataFrame containing the factuals (in their standardized/encoded versions).
-    dataset : mcce.Data
+    dataset : mcce.Data, carla.data.catalog.OnlineCatalog or carla.data.catalog.CsvCatalog object
         Object containing various attributes of the trained dataset.
     higher_card : bool
         If True, the categorical features are allowed to have more than two levels. 
@@ -29,23 +29,30 @@ def distance(cfs,
     cfs.sort_index(inplace=True)
     fact.sort_index(inplace=True)
     
-    cont_feat = dataset.continuous
-    cat_feat = dataset.categorical    
-    cat_feat_encoded = dataset.encoder.get_feature_names(dataset.categorical)
+    continuous = dataset.continuous
+    categorical = dataset.categorical    
+    categorical_encoded = dataset.encoder.get_feature_names(dataset.categorical)
+
+    if dataset.target in continuous:
+        continuous.remove(dataset.target)
+    if dataset.target in categorical:
+        categorical.remove(dataset.target)
+    if dataset.target in categorical_encoded:
+        categorical_encoded.remove(dataset.target)
 
     if higher_card:
         cf_inverse_transform = dataset.inverse_transform(cfs.copy())
         fact_inverse_transform = dataset.inverse_transform(fact.copy())
 
-        cfs_categorical = cf_inverse_transform[cat_feat].sort_index().to_numpy()
-        factual_categorical = fact_inverse_transform[cat_feat].sort_index().to_numpy()
+        cfs_categorical = cf_inverse_transform[categorical].sort_index().to_numpy()
+        factual_categorical = fact_inverse_transform[categorical].sort_index().to_numpy()
 
     else:
-        cfs_categorical = cfs[cat_feat_encoded].sort_index().to_numpy()
-        factual_categorical = fact[cat_feat_encoded].sort_index().to_numpy()
+        cfs_categorical = cfs[categorical_encoded].sort_index().to_numpy()
+        factual_categorical = fact[categorical_encoded].sort_index().to_numpy()
 
-    cfs_continuous = cfs[cont_feat].sort_index().to_numpy()
-    factual_continuous = fact[cont_feat].sort_index().to_numpy()
+    cfs_continuous = cfs[continuous].sort_index().to_numpy()
+    factual_continuous = fact[continuous].sort_index().to_numpy()
     
     delta_cont = factual_continuous - cfs_continuous
     delta_cat = factual_categorical - cfs_categorical
@@ -76,13 +83,13 @@ def feasibility(cfs,
         pd.DataFrame containing the original training data. The features must be standardized/encoded in the 
         same way as the cfs.
     cols : list
-        List containing the features to calculate feasibility on. 
+        List containing the features to calculate feasibility on. Should not include the response/target.
     
     Returns
     -------
         List containing the feasibility metric for each counterfactual in cfs. 
     """
-    
+
     nbrs = NearestNeighbors(n_neighbors=5).fit(df[cols].values)
     results = []
     for _, row in cfs[cols].iterrows():
@@ -109,7 +116,7 @@ def constraint_violation(
     decoded_factuals : pd.DataFrame
         pd.DataFrame containing the original training data. The features must be in their original 
         decoded feature versions.
-    dataset : mcce.Data
+    dataset : mcce.Data, carla.data.catalog.OnlineCatalog or carla.data.catalog.CsvCatalog object
         Object containing various attributes of the trained dataset.
     
     Returns
@@ -123,6 +130,13 @@ def constraint_violation(
     continuous = dataset.continuous
     categorical = dataset.categorical
     immutables = dataset.immutables
+
+    if dataset.target in continuous:
+        continuous.remove(dataset.target)
+    if dataset.target in categorical:
+        categorical.remove(dataset.target)
+    if dataset.target in immutables:
+        immutables.remove(dataset.target)
 
     decoded_cfs.sort_index(inplace=True)
     decoded_factuals.sort_index(inplace=True)

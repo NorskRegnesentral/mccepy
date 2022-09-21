@@ -140,25 +140,26 @@ class MCCE:
     def _fit(self, 
              df):
         
+        # Remember to change this back when not testing!
+        max_depth = None # 5
+
         self.saved_methods = {}
         self.trees = {}
         self.fitted_model = {}
         self.predicted_leaves = {}
 
-        # train
+        # Train
         self.predictor_matrix_columns = self.predictor_matrix.columns.to_numpy()
-        # print(self.visit_sequence.sort_values())
         for col, _ in self.visit_sequence.sort_values().iteritems():
             
-            # initialise the method
+            # Initialise the method
             col_method = METHODS_MAP[self.method[col]](dtype=self.df_dtypes[col],
                                                        minibucket=5,
-                                                       max_depth=None, 
+                                                       max_depth=max_depth, 
                                                        random_state=self.seed)
             
-            # fit the method
+            # Fit tree for each mutable feature
             col_predictors = self.predictor_matrix_columns[self.predictor_matrix.loc[col].to_numpy() == 1]
-            
             col_method.fit(X_df=df[col_predictors], y_df=df[col])
 
             # save the method
@@ -190,34 +191,34 @@ class MCCE:
         self.k = k
         n_test = test_factual.shape[0]
 
-        # create data set with the immutables repeated k times
+        # Create data set with the immutables repeated k times
         synth_df = test_factual[self.immutables_encoded]
         synth_df = pd.concat([synth_df] * self.k)
         synth_df.sort_index(inplace=True)
 
-        # repeat 0 for mutable features k times
+        # Repeat 0 for mutable features k times
         synth_df_mutable = pd.DataFrame(data=np.zeros([self.k * n_test, self.n_mutable]), columns=self.mutable_features, index=synth_df.index)
 
-        generate_timings = {}
+        # generate_timings = {}
 
         synth_df = pd.concat([synth_df, synth_df_mutable], axis=1)
         for col in self.mutable_features:
-            generate_timings[col] = {}
-            time_gen_1 = time.time()
+            # generate_timings[col] = {}
+            # time_gen_1 = time.time()
             # reload the method
             col_method = self.saved_methods[col]
-            time_gen_2 = time.time()
+            # time_gen_2 = time.time()
             
             # predict with the method
             col_predictors = self.predictor_matrix_columns[self.predictor_matrix.loc[col].to_numpy() == 1]
-            time_gen_3 = time.time()
+            # time_gen_3 = time.time()
             
-            synth_df[col], generate_timings[col] = col_method.predict(synth_df[col_predictors])
-            time_gen_4 = time.time()
+            synth_df[col] = col_method.predict(synth_df[col_predictors]) # generate_timings[col] 
+            # time_gen_4 = time.time()
             
             # map dtype to original dtype
             synth_df[col] = synth_df[col].astype(self.df_dtypes[col])
-            time_gen_5 = time.time()
+            # time_gen_5 = time.time()
             
             # generate_timings[col]['load_model'] = time_gen_2 - time_gen_1
             # generate_timings[col]['predictor_matrix_loc'] = time_gen_3 - time_gen_2
@@ -225,7 +226,7 @@ class MCCE:
             # generate_timings[col]['astype'] = time_gen_5 - time_gen_4
             
 
-        # return in same ordering as original dataframe
+        # Return in same ordering as original dataframe
         synth_df = synth_df[test_factual.columns]
         self.synth_df = synth_df
         # self.generate_timings = generate_timings
@@ -255,81 +256,89 @@ class MCCE:
         -------
         
         """
-        generate_timings = {}
+        # postprocess_timings = {}
 
         cols = cfs.columns.to_list()
         self.cutoff = cutoff
 
+        # TO DO: Take this out of postprocess since it's not necessary
+        # Calculate the mean number of unique samples per test obs
+        synth_un = self.synth_df.reset_index()
+        synth_un = synth_un.drop_duplicates()
+        synth_un = synth_un.set_index(synth_un['index'])
+        synth_un = synth_un.drop(columns=['index'])
+        synth_un_per_test = synth_un.groupby(synth_un.index).size()
+        synth_un_per_test = pd.DataFrame(synth_un_per_test, columns=['nb_unique_samples'])
+
         # Predict response of generated data
-        time_gen_1 = time.time()
+        # time_postproc_1 = time.time()
         cfs_positive = cfs[self.model.predict(cfs) >= cutoff]
-        time_gen_2 = time.time()
+        # time_postproc_2 = time.time()
         
-        # print(cfs_positive.shape[0])
+        # We have to do this whole dance to drop duplicates in the same index
+        # But not across indices -- there must be a better way!
         cfs_positive = cfs_positive.reset_index()
         cfs_positive = cfs_positive.drop_duplicates()
         cfs_positive = cfs_positive.set_index(cfs_positive['index'])
         cfs_positive = cfs_positive.drop(columns=['index'])
-        # print(cfs_positive.shape[0])
-
         self.cfs_positive = cfs_positive
         
         # Duplicate original test observations N times where N is number of positive counterfactuals
         n_counterfactuals = cfs_positive.groupby(cfs_positive.index).size()
-        n_counterfactuals = pd.DataFrame(n_counterfactuals, columns = ['N'])
+        n_counterfactuals = pd.DataFrame(n_counterfactuals, columns=['nb_unique_pos'])
 
         fact_repeated = test_factual.copy()
-
-        time_gen_3 = time.time()
+        # time_postproc_3 = time.time()
         
         fact_repeated = fact_repeated.join(n_counterfactuals)
         fact_repeated.dropna(inplace = True)
 
-        fact_repeated = fact_repeated.reindex(fact_repeated.index.repeat(fact_repeated.N))
-        fact_repeated.drop(['N'], axis=1, inplace=True)
-        time_gen_4 = time.time()
+        fact_repeated = fact_repeated.reindex(fact_repeated.index.repeat(fact_repeated['nb_unique_pos']))
+        fact_repeated.drop(['nb_unique_pos'], axis=1, inplace=True)
+        # time_postproc_4 = time.time()
         
         self.fact_repeated = fact_repeated
 
         self.results = self.calculate_metrics(cfs=cfs_positive, 
                                               test_factual=self.fact_repeated, 
                                               higher_cardinality=higher_cardinality) 
-        time_gen_5 = time.time()
+        # time_postproc_5 = time.time()
         
-        # Find the best row for each test obs
+        # Find the best sample for each test obs
         results_sparse = pd.DataFrame(columns=self.results.columns)
 
-        timings_list = []
+        # timings_list = []
         for idx in list(set(self.results.index)):
-            time_gen_6 = time.time()
+            # time_postproc_6 = time.time()
         
             idx_df = self.results.loc[idx]
             if(isinstance(idx_df, pd.DataFrame)): # If you have multiple rows
-                sparse = min(idx_df.L0) # 1) find least # features changed
+                sparse = min(idx_df.L0) # Find least number of features changed
                 sparse_df = idx_df[idx_df.L0 == sparse] 
-                closest = min(sparse_df.L1) # find smallest Gower distance
+                closest = min(sparse_df.L1) # Find smallest Gower distance
                 close_df = sparse_df[sparse_df.L1 == closest].head(1)
 
-            else: # if you have only one row - return that row
+            else: # If you have only one row - return that row
                 close_df = idx_df.to_frame().T
-            time_gen_7 = time.time()
-            timings_list.append(time_gen_7 - time_gen_6)
+            time_postproc_7 = time.time()
+            # timings_list.append(time_postproc_7 - time_postproc_6)
                 
             results_sparse = pd.concat([results_sparse, close_df], axis=0)
         
-        generate_timings['predict'] = time_gen_2 - time_gen_1
-        generate_timings['fact_repeated'] = time_gen_4 - time_gen_3
-        generate_timings['calc_metrics'] = time_gen_5 - time_gen_4
-        generate_timings['avg_for_loop'] = sum(timings_list) / len(timings_list)
-        # generate_timings['length_of_loop'] = len(list(set(self.results.index)))
-        generate_timings['for_loop'] = (sum(timings_list) / len(timings_list)) * len(list(set(self.results.index)))
-        
+        # postprocess_timings['predict'] = time_postproc_2 - time_postproc_1
+        # postprocess_timings['fact_repeated'] = time_postproc_4 - time_postproc_3
+        # postprocess_timings['calc_metrics'] = time_postproc_5 - time_postproc_4
+        # postprocess_timings['avg_for_loop'] = sum(timings_list) / len(timings_list)
+        # postprocess_timings['for_loop'] = (sum(timings_list) / len(timings_list)) * len(list(set(self.results.index)))
         
         # Add the number of positive instances per test observation
         results_sparse = results_sparse.merge(n_counterfactuals, left_index=True, right_index=True)
-        cols = cols + ['N']
+        #  Add the number of unique instances per test observation
+        results_sparse = results_sparse.merge(synth_un_per_test, left_index=True, right_index=True)
+
+        cols = cols + ['nb_unique_pos', 'nb_unique_samples']
         self.results_sparse = results_sparse[cols]
-        self.generate_timings = generate_timings
+        # self.postprocess_timings = postprocess_timings
 
 
 

@@ -1,4 +1,5 @@
 import os
+import sys
 import argparse
 import warnings
 import numpy as np
@@ -36,7 +37,7 @@ parser.add_argument(
     "-n",
     "--number_of_samples",
     type=int,
-    default=100,
+    default=1000,
     help="Number of instances per dataset",
 )
 parser.add_argument(
@@ -49,9 +50,10 @@ parser.add_argument(
     "-device",
     "--device",
     type=str,
-    default='cuda',
-    help="Whether the CARLA methods were trained with a GPU (default) or CPU.",
+    default='cpu',
+    help="Whether the CARLA methods were trained with a GPU or CPU.",
 )
+
 args = parser.parse_args()
 
 path = args.path
@@ -107,71 +109,68 @@ factuals = predict_negative_instances(ml_model, dataset.df)
 test_factual = factuals.iloc[:n_test]
 
 all_results = pd.DataFrame()
-for method in ['mcce']:
-    if method == 'mcce':
-        try:
-            cfs = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_k_several_n_{n_test}_{device}.csv"), index_col=0)
-        except:
-            print(f"No {method} results saved for n_test {n_test} in {path}")
-            continue
-    
-    for k in [5, 10, 25, 50, 100, 500, 1000, 5000, 10000, 25000]:
+try:
+    cfs = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_k_several_n_{n_test}_{device}.csv"), index_col=0)
+except:
+    sys.exit(f"No mcce results saved for n_test {n_test} in {path}")
 
-        df_cfs = cfs[cfs['k'] == k].drop(['method',	'data'], axis=1)
-        # In case the script was accidentally run twice, we drop the duplicate indices per method
-        df_cfs = df_cfs[~df_cfs.index.duplicated(keep='first')]
+for k in [10, 50, 100, 1000, 5000, 10000, 25000]:
+
+    df_cfs = cfs[cfs['k'] == k].drop(['method',	'data'], axis=1)
+    # In case the script was accidentally run twice, we drop the duplicate indices per method
+    df_cfs = df_cfs[~df_cfs.index.duplicated(keep='first')]
+
+    df_cfs.sort_index(inplace=True)
+    if dataset.target not in df_cfs.columns:
+        df_cfs = df_cfs.join(test_factual[dataset.target])
     
-        df_cfs.sort_index(inplace=True)
-        if dataset.target not in df_cfs.columns:
-            df_cfs = df_cfs.join(test_factual[dataset.target])
+    # remove missing values
+    nan_idx = df_cfs.index[df_cfs.isnull().any(axis=1)]
+    non_nan_idx = df_cfs.index[~(df_cfs.isnull()).any(axis=1)]
+
+    output_factuals = test_factual.loc[df_cfs.index.to_list()]
+    output_counterfactuals = df_cfs
+
+    factual_without_nans = output_factuals.drop(index=nan_idx)
+    counterfactuals_without_nans = output_counterfactuals.drop(index=nan_idx)
+
+    # calculate metrics
+    if len(counterfactuals_without_nans) > 0:
+        results = dataset.inverse_transform(counterfactuals_without_nans[factuals.columns])
+        results['method'] = 'mcce'
+        results['data'] = data_name
+        results['k'] = k
         
-        # remove missing values
-        nan_idx = df_cfs.index[df_cfs.isnull().any(axis=1)]
-        non_nan_idx = df_cfs.index[~(df_cfs.isnull()).any(axis=1)]
+        # distance
+        distances = pd.DataFrame(distance(counterfactuals_without_nans, factual_without_nans, dataset, higher_card=False))
+        distances.set_index(non_nan_idx, inplace=True)
+        results = pd.concat([results, distances], axis=1)
 
-        output_factuals = test_factual.loc[df_cfs.index.to_list()]
-        output_counterfactuals = df_cfs
+        # feasibility
+        feas_col = dataset.df.columns.to_list()
+        feas_col.remove(dataset.target)
+        results['feasibility'] = feasibility(counterfactuals_without_nans, factual_without_nans, feas_col)
+        
+        # violation
+        violations = []
+        df_decoded_cfs = dataset.inverse_transform(counterfactuals_without_nans)
+        df_factuals = dataset.inverse_transform(factual_without_nans)
+        
+        total_violations = constraint_violation(df_decoded_cfs, df_factuals, dataset)
+        for x in total_violations:
+            violations.append(x[0])
+        results['violation'] = violations
+        
+        # success
+        results['success'] = success_rate(counterfactuals_without_nans, ml_model, cutoff=0.5)
 
-        factual_without_nans = output_factuals.drop(index=nan_idx)
-        counterfactuals_without_nans = output_counterfactuals.drop(index=nan_idx)
-
-        # calculate metrics
-        if len(counterfactuals_without_nans) > 0:
-            results = dataset.inverse_transform(counterfactuals_without_nans[factuals.columns])
-            results['method'] = method
-            results['data'] = data_name
-            results['k'] = k
-            
-            # distance
-            distances = pd.DataFrame(distance(counterfactuals_without_nans, factual_without_nans, dataset, higher_card=False))
-            distances.set_index(non_nan_idx, inplace=True)
-            results = pd.concat([results, distances], axis=1)
-
-            # feasibility
-            feas_col = dataset.df.columns.to_list()
-            feas_col.remove(dataset.target)
-            results['feasibility'] = feasibility(counterfactuals_without_nans, factual_without_nans, feas_col)
-            
-            # violation
-            violations = []
-            df_decoded_cfs = dataset.inverse_transform(counterfactuals_without_nans)
-            df_factuals = dataset.inverse_transform(factual_without_nans)
-            
-            total_violations = constraint_violation(df_decoded_cfs, df_factuals, dataset)
-            for x in total_violations:
-                violations.append(x[0])
-            results['violation'] = violations
-            
-            # success
-            results['success'] = success_rate(counterfactuals_without_nans, ml_model, cutoff=0.5)
-
-            # time
-            results['time (seconds)'] = df_cfs['time (seconds)'].mean()
-            results['fit (seconds)'] = df_cfs['fit (seconds)'].mean()
-            results['generate (seconds)'] = df_cfs['generate (seconds)'].mean()
-            results['postprocess (seconds)'] = df_cfs['postprocess (seconds)'].mean()
-            
-            all_results = pd.concat([all_results, results], axis=0)
+        # time
+        results['time (seconds)'] = df_cfs['time (seconds)'].mean()
+        results['fit (seconds)'] = df_cfs['fit (seconds)'].mean()
+        results['generate (seconds)'] = df_cfs['generate (seconds)'].mean()
+        results['postprocess (seconds)'] = df_cfs['postprocess (seconds)'].mean()
+        
+        all_results = pd.concat([all_results, results], axis=0)
 
 cols = ['k', 'L0', 'L1', 'feasibility', 'success', 'violation', 'time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']
 temp = all_results[cols]
@@ -187,7 +186,7 @@ to_write_sd.rename(columns={'L0': 'L0_sd', 'L1': 'L1_sd', 'feasibility': 'feasib
 CE_N = temp.groupby(['k']).size().reset_index().rename(columns={0: 'CE_N'})
 
 to_write = pd.concat([to_write_mean, to_write_sd[['L0_sd', 'L1_sd', 'feasibility_sd', 'violation_sd', 'success_sd']], CE_N.CE_N], axis=1)
-to_write = to_write[['k',  'L0', 'L0_sd', 'L1', 'L1_sd', 'feasibility', 'feasibility_sd', 'violation', 'violation_sd', 'success', 'CE_N', 'time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']]
+to_write = to_write[['k', 'L0', 'L0_sd', 'L1', 'L1_sd', 'feasibility', 'feasibility_sd', 'violation', 'violation_sd', 'success', 'CE_N', 'time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']]
 
 # Fix method names
 to_write['method'] = 'MCCE'
@@ -212,4 +211,4 @@ to_write["L1"] = to_write["L1"] + " (" + to_write["L1_sd"] + ")"
 to_write["feasibility"] = to_write["feasibility"] + " (" + to_write["feasibility_sd"] + ")"
 to_write["violation"] = to_write["violation"] + " (" + to_write["violation_sd"] + ")"
 
-print(to_write[['k', 'L0', 'L1', 'feasibility', 'violation', 'CE_N',  'time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']].to_latex(index=False))
+print(to_write[['k', 'L0', 'L1', 'feasibility', 'violation',  'CE_N', 'time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']].to_latex(index=False))

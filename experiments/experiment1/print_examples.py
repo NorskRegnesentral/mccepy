@@ -1,14 +1,12 @@
 import os
 import argparse
+import numpy as np
+import pandas as pd
 import warnings
 warnings.filterwarnings('ignore')
 
 import torch
 torch.manual_seed(0)
-
-import numpy as np
-import pandas as pd
-pd.set_option('display.max_columns', 30)
 
 from carla.data.catalog import OnlineCatalog
 from carla.models.catalog import MLModelCatalog
@@ -33,14 +31,14 @@ parser.add_argument(
     "-n",
     "--number_of_samples",
     type=int,
-    default=100,
+    default=1000,
     help="Number of instances per dataset",
 )
 parser.add_argument(
     "-k",
     "--k",
     type=int,
-    default=10000,
+    default=1000,
     help="Number generated counterfactuals per test observation",
 )
 parser.add_argument(
@@ -53,8 +51,8 @@ parser.add_argument(
     "-device",
     "--device",
     type=str,
-    default='cuda',
-    help="Whether the CARLA methods were trained with a GPU (default) or CPU.",
+    default='cpu',
+    help="Whether the CARLA methods were trained with a GPU or CPU (default).",
 )
 args = parser.parse_args()
 
@@ -101,16 +99,6 @@ elif data_name == 'compas':
     hidden_size=[18, 9, 3],
     force_train=force_train,
     )
-
-if data_name == 'adult':
-    y = dataset.df_test['income']
-elif data_name == 'give_me_some_credit':
-    y = dataset.df_test['SeriousDlqin2yrs']
-elif data_name == 'compas':
-    y = dataset.df_test['score']
-
-pred = ml_model.predict_proba(dataset.df_test)
-pred = [row[1] for row in pred]
 
 factuals = predict_negative_instances(ml_model, dataset.df)
 test_factual = factuals.iloc[:n_test]

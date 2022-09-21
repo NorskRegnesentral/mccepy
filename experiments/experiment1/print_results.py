@@ -1,18 +1,16 @@
 import os
 import argparse
-import warnings
 import numpy as np
+import pandas as pd
+import warnings
 warnings.filterwarnings('ignore')
-
-from carla.data.catalog import OnlineCatalog
-from carla.models.catalog import MLModelCatalog
-from carla.models.negative_instances import predict_negative_instances
 
 import torch
 torch.manual_seed(0)
 
-import pandas as pd
-pd.set_option('display.max_columns', None)
+from carla.data.catalog import OnlineCatalog
+from carla.models.catalog import MLModelCatalog
+from carla.models.negative_instances import predict_negative_instances
 
 from mcce.metrics import distance, constraint_violation, feasibility, success_rate
 
@@ -103,15 +101,6 @@ elif data_name == 'compas':
     force_train=force_train,
     )
 
-if data_name == 'adult':
-    y = dataset.df_test['income']
-elif data_name == 'give_me_some_credit':
-    y = dataset.df_test['SeriousDlqin2yrs']
-elif data_name == 'compas':
-    y = dataset.df_test['score']
-
-pred = ml_model.predict_proba(dataset.df_test)
-pred = [row[1] for row in pred]
 factuals = predict_negative_instances(ml_model, dataset.df)
 test_factual = factuals.iloc[:n_test]
 
@@ -152,7 +141,7 @@ for method in ['cchvae', 'cem-vae', 'revise', 'clue', 'crud', 'face', 'mcce']:
 
     # calculate metrics
     if len(counterfactuals_without_nans) > 0:
-        results = dataset.inverse_transform(counterfactuals_without_nans[factuals.columns])
+        results = dataset.inverse_transform(counterfactuals_without_nans) # [factuals.columns]
         results['method'] = method
         results['data'] = data_name
         
@@ -196,7 +185,6 @@ to_write_sd.reset_index(inplace=True)
 to_write_sd.rename(columns={'L0': 'L0_sd', 'L1': 'L1_sd', 'feasibility': 'feasibility_sd', 'violation': 'violation_sd', 'success': 'success_sd'}, inplace=True)
 
 CE_N = temp.groupby(['method']).size().reset_index().rename(columns={0: 'CE_N'})
-
 to_write = pd.concat([to_write_mean, to_write_sd[['L0_sd', 'L1_sd', 'feasibility_sd', 'violation_sd', 'success_sd']], CE_N.CE_N], axis=1)
 to_write = to_write[['method', 'L0', 'L0_sd', 'L1', 'L1_sd', 'feasibility', 'feasibility_sd', 'violation', 'violation_sd', 'success', 'CE_N', 'time (seconds)']]
 

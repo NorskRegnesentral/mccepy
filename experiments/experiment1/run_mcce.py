@@ -143,7 +143,7 @@ for immutable in immutables:
     else:
         immutable_features_encoded.append(immutable)
 
-# Create new dataset class
+# Create new dataset object
 dataset_mcce = DatasetMCCE(immutables=immutables, 
                            target=dataset.target,
                            categorical=dataset.categorical,

@@ -233,6 +233,4 @@ to_write["L1"] = to_write["L1"] + " (" + to_write["L1_sd"] + ")"
 to_write["feasibility"] = to_write["feasibility"] + " (" + to_write["feasibility_sd"] + ")"
 to_write["violation"] = to_write["violation"] + " (" + to_write["violation_sd"] + ")"
 
-# print(to_write[['method', 'n_test', 'L0', 'L1', 'feasibility', 'violation', 'success', 'CE_N', 'time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']].to_string())
-# print("\n")
 print(to_write[['method', 'n_test', 'L0', 'L1', 'feasibility', 'violation', 'CE_N', 'time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']].to_latex(index=False))

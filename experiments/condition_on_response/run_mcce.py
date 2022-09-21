@@ -77,12 +77,6 @@ parser.add_argument(
     action='store_true',  # default is False
     help="Whether to train the prediction model from scratch or not. Default will not train.",
 )
-parser.add_argument(
-    "-MJ",
-    "--MJ",
-    action='store_true',  # default is False
-    help="Whether to train the prediction model from scratch or not. Default will not train.",
-)
 args = parser.parse_args()
 
 n_test = args.number_of_samples
@@ -90,7 +84,6 @@ data_name = args.dataset
 force_train = args.force_train
 path = args.path
 k = args.k
-MJ = args.MJ
 seed = 1
 
 print(f"Load {data_name} data set")
@@ -143,7 +136,6 @@ pred = ml_model.predict(df)
 pred = [row[0] for row in pred]
 
 df[new_target] = [1 if row >= 0.5 else 0 for row in pred]
-df[new_target] = df[new_target].astype(str)
 
 immutable_features_encoded = []
 for immutable in immutables:
@@ -173,7 +165,6 @@ dataset_mcce = Dataset(immutables=immutables,
 dtypes = dict([(x, "float") for x in dataset_mcce.continuous])
 for x in dataset_mcce.categorical_encoded:
     dtypes[x] = "category"
-
 df = (df).astype(dtypes)
 
 print("Find unhappy customers and choose which ones to make counterfactuals for")
@@ -181,7 +172,7 @@ factuals = predict_negative_instances(ml_model, df)
 test_factual = factuals.iloc[:n_test]
 
 # This cannot go on in as a string! Will make the tree prediction SOOO SLOW!!
-test_factual[new_target] = np.ones(test_factual.shape[0])#.astype(str)
+test_factual[new_target] = np.ones(test_factual.shape[0])
 test_factual[new_target] = test_factual[new_target].astype("category")
 
 # MCCE
@@ -201,13 +192,7 @@ for k in [5, 10, 25, 50, 100, 500, 1000, 5000, 10000, 25000]:
     cfs = mcce.generate(test_factual.drop(dataset_mcce.target, axis=1), k=k)
     time_generate = time.time()
 
-    if MJ:
-        print("Postprocessing with MJs version")
-        mcce.postprocess_MJ(cfs, test_factual, cutoff=0.5, higher_cardinality=False)
-    else:
-        print("Postprocessing with normal version")
-        mcce.postprocess(cfs, test_factual, cutoff=0.5, higher_cardinality=False)
-    
+    mcce.postprocess(cfs, test_factual, cutoff=0.5, higher_cardinality=False)
     time_postprocess = time.time()
 
     # Uncomment this if you want to save the trees to plot later!
@@ -226,28 +211,16 @@ for k in [5, 10, 25, 50, 100, 500, 1000, 5000, 10000, 25000]:
     results['method'] = 'mcce'
     results['n_test'] = n_test
     results['k'] = k
-    results['nb_unique_pos'] = results['nb_unique_pos']
-    results['nb_unique_samples'] = results['synth_un_per_test']
     
-
-    # Get the fitted tree depth for each mutable feature
-    # tree_depth_cols = []
-    # for x in dataset_mcce.feature_order:
-    #     try:
-    #         results[x + "_tree_depth"] = mcce.fitted_model[x].get_depth()
-    #         tree_depth_cols.append(x + "_tree_depth")
-    #     except:
-    #         continue
-
     results_copy = results.copy()
     results_copy[ml_model.feature_input_order] = results_copy[ml_model.feature_input_order].astype(float)
 
     results['prediction'] = ml_model.predict(results_copy)
 
-    cols = ['data', 'method', 'n_test', 'k', 'nb_unique_pos', 'nb_unique_samples'] + dataset_mcce.categorical_encoded + dataset_mcce.continuous + ['time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']
+    cols = ['data', 'method', 'n_test', 'k'] + dataset_mcce.categorical_encoded + dataset_mcce.continuous + ['time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']
     results.sort_index(inplace=True)
 
-    path_all = os.path.join(path, f"{data_name}_mcce_results_k_several_n_{n_test}_{device}_MJ_{MJ}.csv")
+    path_all = os.path.join(path, f"{data_name}_mcce_results_k_several_n_{n_test}_{device}.csv")
     if(os.path.exists(path_all)):
         results[cols].to_csv(path_all, mode='a', header=False)
     else:

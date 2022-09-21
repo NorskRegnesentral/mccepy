@@ -179,16 +179,8 @@ results['data'] = data_name
 results['method'] = 'mcce'
 results['n_test'] = n_test
 results['k'] = k
-results['n_positive'] = results['N']
 
-# Get the fitted tree depth for each mutable feature
-# tree_depth_cols = []
-# for x in dataset.feature_order:
-#     if x not in dataset.immutables:
-#         tree_depth_cols.append(x + "_tree_depth")
-#         results[x + "_tree_depth"] = mcce.fitted_model[x].get_depth()
-
-cols = ['data', 'method', 'n_test', 'k', 'n_positive'] + cat_feat_encoded.tolist() + cont_feat + ['time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']
+cols = ['data', 'method', 'n_test', 'k'] + cat_feat_encoded.tolist() + cont_feat + ['time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']
 results.sort_index(inplace=True)
 
 results[cols].to_csv(os.path.join(path, f"{data_name}_mcce_results_tree_model_k_{k}_n_{n_test}_{device}.csv"))

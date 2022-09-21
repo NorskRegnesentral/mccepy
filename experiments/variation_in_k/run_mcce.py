@@ -108,8 +108,7 @@ mcce = MCCE(dataset=dataset,
 mcce.fit(df.drop(dataset.target, axis=1), dtypes)
 time_fit = time.time()
 
-for k in [5, 10, 25, 50, 100, 500, 1000, 5000, 10000, 25000]: # 500, 1000, 5000, 10000, 25000, 50000, 100000
-    print(f"K: {k}")
+for k in [5, 10, 25, 50, 100, 500, 1000, 5000, 10000, 25000]:
     
     time_k_start = time.time()
 
@@ -130,38 +129,13 @@ for k in [5, 10, 25, 50, 100, 500, 1000, 5000, 10000, 25000]: # 500, 1000, 5000,
     results['method'] = 'mcce'
     results['n_test'] = n_test
     results['k'] = k
-    results['nb_unique_pos'] = results['nb_unique_pos']
-    results['nb_unique_samples'] = results['nb_unique_samples']
-    
-    # Count the number of unique synthesized rows per index
-    # synth_df = mcce.synth_df.reset_index()
-    # synth_df['Nunique_synthdf'] = synth_df.groupby(synth_df.columns.to_list()).cumcount() + 1
-    # synth_df = synth_df.groupby(synth_df.columns.to_list()).max(['Nunique_synthdf']).reset_index()
-    # synth_df = synth_df.set_index(synth_df['index'])
-    # synth_df = synth_df.drop(columns=['index'])
-    # results = results.merge(synth_df[['Nunique_synthdf']])
-
-    # Count the number of unique positive rows per index
-    # pos_df = mcce.results.reset_index()
-    # pos_df['Nunique_pos'] = pos_df.groupby(synth_df.columns.to_list()).cumcount() + 1
-    # pos_df = pos_df.groupby(synth_df.columns.to_list()).max(['Nunique_pos']).reset_index()
-    # pos_df = pos_df.set_index(synth_df['index'])
-    # pos_df = pos_df.drop(columns=['index'])
-    # results = results.merge(pos_df[['Nunique_pos']])
-
-    # Get the fitted tree depth for each mutable feature
-    # tree_depth_cols = []
-    # for x in dataset.feature_order:
-    #     if x not in dataset.immutables:
-    #         tree_depth_cols.append(x + "_tree_depth")
-    #         results[x + "_tree_depth"] = mcce.fitted_model[x].get_depth()
 
     results_copy = results.copy()
     results_copy[ml_model.feature_input_order] = results_copy[ml_model.feature_input_order].astype(float)
 
     results['prediction'] = ml_model.predict(results_copy)
 
-    cols = ['data', 'method', 'n_test', 'k', 'nb_unique_pos', 'nb_unique_samples'] + cat_feat_encoded.tolist() + cont_feat + ['time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']
+    cols = ['data', 'method', 'n_test', 'k'] + cat_feat_encoded.tolist() + cont_feat + ['time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']
     results.sort_index(inplace=True)
 
     path_all = os.path.join(path, f"{data_name}_mcce_results_k_several_n_{n_test}_{device}.csv")

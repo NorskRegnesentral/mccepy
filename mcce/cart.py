@@ -41,9 +41,6 @@ class CARTMethod(Method):
         self.max_depth = max_depth
         self.random_state = random_state
 
-        # print(f"Max depth is: {self.max_depth}")
-        # print(f"Minibucket is {self.minibucket}")
-
         if self.dtype in CAT_COLS_DTYPES:
             self.cart = DecisionTreeClassifier(min_samples_leaf=self.minibucket, max_depth=self.max_depth, random_state=self.random_state)
         if self.dtype in NUM_COLS_DTYPES:
@@ -70,11 +67,12 @@ class CARTMethod(Method):
         if self.dtype in NUM_COLS_DTYPES:
             self.y_real_min, self.y_real_max = np.min(y_df), np.max(y_df)
 
+        # Turns out, you get the same trees if X and y are numeric or categorical
         X = X_df.to_numpy()
         y = y_df.to_numpy()
         self.cart.fit(X, y)
 
-        # save the y distribution wrt trained tree nodes
+        # Save the y distribution wrt trained tree nodes
         leaves = self.cart.apply(X)
         leaves_y_df = pd.DataFrame({'leaves': leaves, 'y': y})
         self.leaves_y_dict = leaves_y_df.groupby('leaves').apply(lambda x: x.to_numpy()[:, -1]).to_dict()
@@ -93,10 +91,13 @@ class CARTMethod(Method):
         """
         generate_timings = {}
         time_gen_1 = time.time()
-        X_test_df, _ = self.prepare_dfs(X_df=X_test_df, normalise_num_cols=False, one_hot_cat_cols=True, fit=False)
+        ## NEW: CHANGED ONEHOTCATCOLS to FALSE!!! DOES THIS CHANGE RESULTS??
+        # print(X_test_df.head(5))
+        X_test_df, _ = self.prepare_dfs(X_df=X_test_df, normalise_num_cols=False, one_hot_cat_cols=False, fit=False)
+        # print(X_test_df.head(5))
         time_gen_2 = time.time()
 
-        # predict the leaves and for each leaf randomly sample from the observed values
+        # Find the leaves and for each test obs and randomly sample from the observed values
         X_test = X_test_df.to_numpy()
         leaves_pred = self.cart.apply(X_test)
         time_gen_3 = time.time()

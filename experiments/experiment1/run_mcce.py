@@ -1,9 +1,13 @@
 import os
 import argparse
 import time
-import torch
 import re
 import numpy as np
+import warnings
+warnings.filterwarnings('ignore')
+
+import torch
+torch.manual_seed(0)
 
 from carla.data.catalog import OnlineCatalog
 from carla.models.catalog import MLModelCatalog
@@ -176,7 +180,7 @@ start = time.time()
 mcce = MCCE(dataset=dataset_mcce,
             model=ml_model)
 
-mcce.fit(df.drop(dataset.target, axis=1), dtypes)
+mcce.fit(df.drop(dataset_mcce.target, axis=1), dtypes)
 time_fit = time.time()
 
 print("Sample observations from tree nodes")

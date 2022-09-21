@@ -36,14 +36,14 @@ parser.add_argument(
     "-n",
     "--number_of_samples",
     type=int,
-    default=100,
+    default=1000,
     help="Number of instances per dataset",
 )
 parser.add_argument(
     "-k",
     "--k",
     type=int,
-    default=10000,
+    default=1000,
     help="Number generated counterfactuals per test observation",
 )
 parser.add_argument(
@@ -56,8 +56,8 @@ parser.add_argument(
     "-device",
     "--device",
     type=str,
-    default='cuda',
-    help="Whether the CARLA methods were trained with a GPU (default) or CPU.",
+    default='cpu',
+    help="Whether the CARLA methods were trained with a GPU or CPU (default).",
 )
 
 args = parser.parse_args()
@@ -65,11 +65,9 @@ args = parser.parse_args()
 path = args.path
 data_name = args.dataset
 n_test = args.number_of_samples
-k = args.k
 force_train = args.force_train
 device = args.device # cuda # cpu
-if data_name == 'compas':
-    k = 1000
+k = args.k
 
 print(f"Load {data_name} data set")
 

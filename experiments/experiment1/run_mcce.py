@@ -2,12 +2,39 @@ import os
 import argparse
 import time
 import torch
+import re
+import numpy as np
 
 from carla.data.catalog import OnlineCatalog
 from carla.models.catalog import MLModelCatalog
 from carla.models.negative_instances import predict_negative_instances
 
 from mcce.mcce import MCCE
+
+class DatasetMCCE():
+    def __init__(self, 
+                 immutables, 
+                 target,
+                 categorical,
+                 categorical_encoded,
+                 immutables_encoded,
+                 continuous,
+                 feature_order,
+                 encoder,
+                 scaler,
+                 inverse_transform,
+                 ):
+        
+        self.immutables = immutables
+        self.target = target
+        self.categorical = categorical
+        self.categorical_encoded = categorical_encoded
+        self.immutables_encoded = immutables_encoded
+        self.continuous = continuous
+        self.feature_order = feature_order
+        self.encoder = encoder
+        self.scaler = scaler
+        self.inverse_transform = inverse_transform
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -30,7 +57,7 @@ parser.add_argument(
     "-n",
     "--number_of_samples",
     type=int,
-    default=100,
+    default=1000,
     help="Number of test observations to generate counterfactuals for.",
 )
 parser.add_argument(
@@ -52,12 +79,10 @@ n_test = args.number_of_samples
 data_name = args.dataset
 force_train = args.force_train
 path = args.path
+k = args.k
 seed = 1
-k = args.k # 1000 for Compas
-if data_name == 'compas':
-    k = 1000
 
-print(f"Load {data_name} data set")
+print(f"Load {data_name} data set using CARLA")
 dataset = OnlineCatalog(data_name)
 
 print("Load/train predictive model")
@@ -93,32 +118,69 @@ elif data_name == 'compas':
     force_train=force_train,
     )
 
+# Define new target feature to use while training
+target = dataset.target
+new_target = target + '_High'
+
+categorical = dataset.categorical + [dataset.target]
+categorical_encoded = dataset.encoder.get_feature_names(dataset.categorical).tolist() + [new_target]
+immutables = dataset.immutables + [dataset.target]
+
+df = dataset.df
+
+# Change prediction from numeric to categorical
+pred = ml_model.predict(df)
+pred = [row[0] for row in pred]
+df[new_target] = [1 if row >= 0.5 else 0 for row in pred]
+
+immutable_features_encoded = []
+for immutable in immutables:
+    if immutable in categorical:
+        for new_col in categorical_encoded:
+            match = re.search(immutable, new_col)
+            if match:
+                immutable_features_encoded.append(new_col)
+    else:
+        immutable_features_encoded.append(immutable)
+
+# Create new dataset class
+dataset_mcce = DatasetMCCE(immutables=immutables, 
+                           target=dataset.target,
+                           categorical=dataset.categorical,
+                           categorical_encoded=categorical_encoded,
+                           immutables_encoded=immutable_features_encoded,
+                           continuous=dataset.continuous,
+                           feature_order=ml_model.feature_input_order,
+                           encoder=dataset.encoder,
+                           scaler=dataset.scaler,
+                           inverse_transform=dataset.inverse_transform
+                           )
+
+                       
+#  Create dtypes for MCCE
+dtypes = dict([(x, "float") for x in dataset_mcce.continuous])
+for x in dataset_mcce.categorical_encoded:
+    dtypes[x] = "category"
+df = (df).astype(dtypes)
+
 print("Find unhappy customers and choose which ones to make counterfactuals for")
-factuals = predict_negative_instances(ml_model, dataset.df)
+factuals = predict_negative_instances(ml_model, df)
 test_factual = factuals.iloc[:n_test]
 
-y_col = dataset.target
-cont_feat = dataset.continuous
-
-cat_feat = dataset.categorical
-cat_feat_encoded = dataset.encoder.get_feature_names(dataset.categorical)
-
-#  Create dtypes for MCCE()
-dtypes = dict([(x, "float") for x in cont_feat])
-for x in cat_feat_encoded:
-    dtypes[x] = "category"
-df = (dataset.df).astype(dtypes)
+# Define new value for predicted target in test factual
+test_factual[new_target] = np.ones(test_factual.shape[0])
+test_factual[new_target] = test_factual[new_target].astype("category")
 
 print("Fit trees")
 start = time.time()
-mcce = MCCE(dataset=dataset,
+mcce = MCCE(dataset=dataset_mcce,
             model=ml_model)
 
 mcce.fit(df.drop(dataset.target, axis=1), dtypes)
 time_fit = time.time()
 
 print("Sample observations from tree nodes")
-cfs = mcce.generate(test_factual.drop(dataset.target, axis=1), k=k)
+cfs = mcce.generate(test_factual.drop(dataset_mcce.target, axis=1), k=k)
 time_generate = time.time()
 
 print("Process sampled observations")
@@ -127,7 +189,7 @@ time_postprocess = time.time()
 
 results = mcce.results_sparse
 
-results['time (seconds)'] = time.time() - start
+results['time (seconds)'] = (time_fit - start) + (time_generate - time_fit) + (time_postprocess - time_generate)
 results['fit (seconds)'] = time_fit - start
 results['generate (seconds)'] = time_generate - time_fit
 results['postprocess (seconds)'] = time_postprocess - time_generate
@@ -137,7 +199,7 @@ results['method'] = 'mcce'
 results['n_test'] = n_test
 results['k'] = k
 
-cols = ['data', 'method', 'n_test', 'k'] + cat_feat_encoded.tolist() + cont_feat + ['time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']
+cols = ['data', 'method', 'n_test', 'k'] + dataset_mcce.categorical_encoded + dataset_mcce.continuous + ['time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']
 results.sort_index(inplace=True)
 
 results[cols].to_csv(os.path.join(path, f"{data_name}_mcce_results_k_{k}_n_{n_test}_{device}.csv"))

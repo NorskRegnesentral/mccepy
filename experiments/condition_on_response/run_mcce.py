@@ -180,8 +180,9 @@ print("Find unhappy customers and choose which ones to make counterfactuals for"
 factuals = predict_negative_instances(ml_model, df)
 test_factual = factuals.iloc[:n_test]
 
-# New!
-test_factual[new_target] = np.ones(test_factual.shape[0]).astype(str)
+# This cannot go on in as a string! Will make the tree prediction SOOO SLOW!!
+test_factual[new_target] = np.ones(test_factual.shape[0])#.astype(str)
+test_factual[new_target] = test_factual[new_target].astype("category")
 
 # MCCE
 print("Fit trees")

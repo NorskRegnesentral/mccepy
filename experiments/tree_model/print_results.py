@@ -2,21 +2,18 @@ import os
 import sys
 import argparse
 import numpy as np
+import pandas as pd
 import warnings
 warnings.filterwarnings('ignore')
-import numpy as np
-
-import pandas as pd
-pd.set_option('display.max_columns', None)
 
 import torch
 torch.manual_seed(0)
 
 from sklearn.ensemble import RandomForestClassifier
 
+from carla import MLModel
 from carla.data.catalog import OnlineCatalog
 from carla.models.negative_instances import predict_negative_instances
-from carla import MLModel
 
 from mcce.metrics import distance, constraint_violation, feasibility, success_rate
 
@@ -116,32 +113,30 @@ parser.add_argument(
     "-n",
     "--number_of_samples",
     type=int,
-    default=100,
+    default=1000,
     help="Number of test observations to generate counterfactuals for.",
 )
 parser.add_argument(
     "-k",
     "--k",
     type=int,
-    default=10000,
+    default=1000,
     help="Number of observations to sample from each end node for MCCE method.",
 )
 parser.add_argument(
     "-device",
     "--device",
     type=str,
-    default='cuda',
-    help="Whether the CARLA methods were trained with a GPU (default) or CPU.",
+    default='cpu',
+    help="Whether the CARLA methods were trained with a GPU or CPU.",
 )
 args = parser.parse_args()
 
 path = args.path
 data_name = args.dataset
 n_test = args.number_of_samples
+device = args.device # cuda # cpu
 k = args.k
-device = args.device
-if data_name == 'compas':
-    k = 1000
 
 # Load data set from CARLA
 dataset = OnlineCatalog(data_name)
@@ -178,7 +173,7 @@ factual_without_nans = factual_without_nans.loc[counterfactuals_without_nans.ind
 
 # Calculate metrics
 if len(counterfactuals_without_nans) > 0:
-    results = dataset.inverse_transform(counterfactuals_without_nans[factuals.columns])
+    results = dataset.inverse_transform(counterfactuals_without_nans) # [factuals.columns]
     results['method'] = 'mcce'
     results['data'] = data_name
     
@@ -212,7 +207,6 @@ if len(counterfactuals_without_nans) > 0:
 cols = ['method', 'L0', 'L1', 'feasibility', 'success', 'violation', 'time (seconds)']
 temp = results[cols]
 
-print("Writing results")
 to_write_mean = temp[['method', 'L0', 'L1', 'feasibility', 'violation', 'success', 'time (seconds)']].groupby(['method']).mean()
 to_write_mean.reset_index(inplace=True)
 
@@ -226,14 +220,7 @@ to_write = to_write[['method', 'L0', 'L0_sd', 'L1', 'L1_sd', 'feasibility', 'fea
 
 
 # Fix method names
-dct = {'original': 'Original', 
-       'cchvae': 'C-CHVAE',
-       'cem-vae': 'CEM-VAE',
-       'clue': 'CLUE',
-       'crud': 'CRUDS',
-       'face': 'FACE',
-       'revise': 'REViSE',
-       'mcce': 'MCCE'}
+dct = {'mcce': 'MCCE'}
 
 to_write['method'] = [dct[item] for item in to_write['method']]
 
@@ -257,6 +244,4 @@ to_write["L1"] = to_write["L1"] + " (" + to_write["L1_sd"] + ")"
 to_write["feasibility"] = to_write["feasibility"] + " (" + to_write["feasibility_sd"] + ")"
 to_write["violation"] = to_write["violation"] + " (" + to_write["violation_sd"] + ")"
 
-# print(to_write[['method', 'L0', 'L1', 'feasibility', 'violation', 'success', 'CE_N', 'time (seconds)']].to_string())
-# print("\n")
 print(to_write[['method', 'L0', 'L1', 'feasibility', 'violation', 'success', 'CE_N', 'time (seconds)']].to_latex(index=False))

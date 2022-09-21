@@ -1,20 +1,20 @@
 import os
+import os
 import sys
 import argparse
 import numpy as np
+import pandas as pd
 import warnings
 warnings.filterwarnings('ignore')
 
 import torch
 torch.manual_seed(0)
 
-import pandas as pd
-pd.set_option('display.max_columns', None)
 from sklearn.ensemble import RandomForestClassifier
 
+from carla import MLModel
 from carla.data.catalog import OnlineCatalog
 from carla.models.negative_instances import predict_negative_instances
-from carla import MLModel
 
 class RandomForestModel(MLModel):
     """
@@ -112,22 +112,22 @@ parser.add_argument(
     "-n",
     "--number_of_samples",
     type=int,
-    default=100,
+    default=1000,
     help="Number of test observations to generate counterfactuals for.",
 )
 parser.add_argument(
     "-k",
     "--k",
     type=int,
-    default=10000,
+    default=1000,
     help="Number of observations to sample from each end node for MCCE method.",
 )
 parser.add_argument(
     "-device",
     "--device",
     type=str,
-    default='cuda',
-    help="Whether the CARLA methods were trained with a GPU (default) or CPU.",
+    default='cpu',
+    help="Whether the CARLA methods were trained with a GPU or CPU.",
 )
 args = parser.parse_args()
 
@@ -172,7 +172,7 @@ factual_without_nans['data'] = data_name
 
 # counterfactuals
 if len(counterfactuals_without_nans) > 0:
-    results = dataset.inverse_transform(counterfactuals_without_nans[factuals.columns])
+    results = dataset.inverse_transform(counterfactuals_without_nans) # [factuals.columns]
     results['method'] = 'mcce'
     results['data'] = data_name
 

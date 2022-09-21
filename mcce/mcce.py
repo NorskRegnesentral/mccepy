@@ -199,37 +199,22 @@ class MCCE:
         # Repeat 0 for mutable features k times
         synth_df_mutable = pd.DataFrame(data=np.zeros([self.k * n_test, self.n_mutable]), columns=self.mutable_features, index=synth_df.index)
 
-        # generate_timings = {}
-
         synth_df = pd.concat([synth_df, synth_df_mutable], axis=1)
         for col in self.mutable_features:
-            # generate_timings[col] = {}
-            # time_gen_1 = time.time()
-            # reload the method
+            # Reload the fitted tree
             col_method = self.saved_methods[col]
-            # time_gen_2 = time.time()
             
-            # predict with the method
+            # Predict with the fitted tree
             col_predictors = self.predictor_matrix_columns[self.predictor_matrix.loc[col].to_numpy() == 1]
-            # time_gen_3 = time.time()
             
-            synth_df[col] = col_method.predict(synth_df[col_predictors]) # generate_timings[col] 
-            # time_gen_4 = time.time()
+            synth_df[col] = col_method.predict(synth_df[col_predictors]) 
             
-            # map dtype to original dtype
+            # Map feature to original dtype
             synth_df[col] = synth_df[col].astype(self.df_dtypes[col])
-            # time_gen_5 = time.time()
             
-            # generate_timings[col]['load_model'] = time_gen_2 - time_gen_1
-            # generate_timings[col]['predictor_matrix_loc'] = time_gen_3 - time_gen_2
-            # generate_timings[col]['predict'] = time_gen_4 - time_gen_3
-            # generate_timings[col]['astype'] = time_gen_5 - time_gen_4
-            
-
         # Return in same ordering as original dataframe
         synth_df = synth_df[test_factual.columns]
         self.synth_df = synth_df
-        # self.generate_timings = generate_timings
         return synth_df
 
     def postprocess(self, 
@@ -256,24 +241,20 @@ class MCCE:
         -------
         
         """
-        # postprocess_timings = {}
-
         cols = cfs.columns.to_list()
         self.cutoff = cutoff
 
         # TO DO: Take this out of postprocess since it's not necessary
         # Calculate the mean number of unique samples per test obs
-        synth_un = self.synth_df.reset_index()
-        synth_un = synth_un.drop_duplicates()
-        synth_un = synth_un.set_index(synth_un['index'])
-        synth_un = synth_un.drop(columns=['index'])
-        synth_un_per_test = synth_un.groupby(synth_un.index).size()
-        synth_un_per_test = pd.DataFrame(synth_un_per_test, columns=['nb_unique_samples'])
+        # synth_un = self.synth_df.reset_index()
+        # synth_un = synth_un.drop_duplicates()
+        # synth_un = synth_un.set_index(synth_un['index'])
+        # synth_un = synth_un.drop(columns=['index'])
+        # synth_un_per_test = synth_un.groupby(synth_un.index).size()
+        # synth_un_per_test = pd.DataFrame(synth_un_per_test, columns=['nb_unique_samples'])
 
         # Predict response of generated data
-        # time_postproc_1 = time.time()
         cfs_positive = cfs[self.model.predict(cfs) >= cutoff]
-        # time_postproc_2 = time.time()
         
         # We have to do this whole dance to drop duplicates in the same index
         # But not across indices -- there must be a better way!
@@ -288,28 +269,23 @@ class MCCE:
         n_counterfactuals = pd.DataFrame(n_counterfactuals, columns=['nb_unique_pos'])
 
         fact_repeated = test_factual.copy()
-        # time_postproc_3 = time.time()
         
         fact_repeated = fact_repeated.join(n_counterfactuals)
         fact_repeated.dropna(inplace = True)
 
         fact_repeated = fact_repeated.reindex(fact_repeated.index.repeat(fact_repeated['nb_unique_pos']))
         fact_repeated.drop(['nb_unique_pos'], axis=1, inplace=True)
-        # time_postproc_4 = time.time()
         
         self.fact_repeated = fact_repeated
 
         self.results = self.calculate_metrics(cfs=cfs_positive, 
                                               test_factual=self.fact_repeated, 
                                               higher_cardinality=higher_cardinality) 
-        # time_postproc_5 = time.time()
         
         # Find the best sample for each test obs
         results_sparse = pd.DataFrame(columns=self.results.columns)
 
-        # timings_list = []
         for idx in list(set(self.results.index)):
-            # time_postproc_6 = time.time()
         
             idx_df = self.results.loc[idx]
             if(isinstance(idx_df, pd.DataFrame)): # If you have multiple rows
@@ -320,26 +296,17 @@ class MCCE:
 
             else: # If you have only one row - return that row
                 close_df = idx_df.to_frame().T
-            time_postproc_7 = time.time()
-            # timings_list.append(time_postproc_7 - time_postproc_6)
                 
             results_sparse = pd.concat([results_sparse, close_df], axis=0)
-        
-        # postprocess_timings['predict'] = time_postproc_2 - time_postproc_1
-        # postprocess_timings['fact_repeated'] = time_postproc_4 - time_postproc_3
-        # postprocess_timings['calc_metrics'] = time_postproc_5 - time_postproc_4
-        # postprocess_timings['avg_for_loop'] = sum(timings_list) / len(timings_list)
-        # postprocess_timings['for_loop'] = (sum(timings_list) / len(timings_list)) * len(list(set(self.results.index)))
         
         # Add the number of positive instances per test observation
         results_sparse = results_sparse.merge(n_counterfactuals, left_index=True, right_index=True)
         #  Add the number of unique instances per test observation
-        results_sparse = results_sparse.merge(synth_un_per_test, left_index=True, right_index=True)
+        # results_sparse = results_sparse.merge(synth_un_per_test, left_index=True, right_index=True)
 
-        cols = cols + ['nb_unique_pos', 'nb_unique_samples']
+        cols = cols + ['nb_unique_pos'] # , 'nb_unique_samples'
         self.results_sparse = results_sparse[cols]
-        # self.postprocess_timings = postprocess_timings
-
+        
 
 
     def postprocess_MJ(self, 

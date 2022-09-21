@@ -1,8 +1,13 @@
 import os
+import re
 import argparse
 import time
-from tkinter import N
+import numpy as np
+import warnings
+warnings.filterwarnings('ignore')
+
 import torch
+torch.manual_seed(0)
 
 from carla.data.catalog import OnlineCatalog
 from carla.models.catalog import MLModelCatalog
@@ -10,6 +15,31 @@ from carla.models.negative_instances import predict_negative_instances
 
 from mcce.mcce import MCCE
 
+class DatasetMCCE():
+    def __init__(self, 
+                 immutables, 
+                 target,
+                 categorical,
+                 categorical_encoded,
+                 immutables_encoded,
+                 continuous,
+                 feature_order,
+                 encoder,
+                 scaler,
+                 inverse_transform,
+                 ):
+        
+        self.immutables = immutables
+        self.target = target
+        self.categorical = categorical
+        self.categorical_encoded = categorical_encoded
+        self.immutables_encoded = immutables_encoded
+        self.continuous = continuous
+        self.feature_order = feature_order
+        self.encoder = encoder
+        self.scaler = scaler
+        self.inverse_transform = inverse_transform
+    
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 parser = argparse.ArgumentParser(description="Fit MCCE with various datasets.")
@@ -31,7 +61,7 @@ parser.add_argument(
     "-k",
     "--k",
     type=int,
-    default=10000,
+    default=1000,
     help="Number of samples for each test observation.",
 )
 parser.add_argument(
@@ -83,27 +113,60 @@ elif data_name == 'compas':
     hidden_size=[18, 9, 3],
     force_train=force_train,
     )
-factuals = predict_negative_instances(ml_model, dataset.df)
-# print(factuals.shape)
+# Define new target feature to use while training
+target = dataset.target
+new_target = target + '_High'
 
-y_col = dataset.target
-cont_feat = dataset.continuous
+categorical = dataset.categorical + [dataset.target]
+categorical_encoded = dataset.encoder.get_feature_names(dataset.categorical).tolist() + [new_target]
+immutables = dataset.immutables + [dataset.target]
 
-cat_feat = dataset.categorical
-cat_feat_encoded = dataset.encoder.get_feature_names(dataset.categorical)
+df = dataset.df
 
-#  Create dtypes for MCCE()
-dtypes = dict([(x, "float") for x in cont_feat])
-for x in cat_feat_encoded:
+# Change prediction from numeric to categorical
+pred = ml_model.predict(df)
+pred = [row[0] for row in pred]
+df[new_target] = [1 if row >= 0.5 else 0 for row in pred]
+
+immutable_features_encoded = []
+for immutable in immutables:
+    if immutable in categorical:
+        for new_col in categorical_encoded:
+            match = re.search(immutable, new_col)
+            if match:
+                immutable_features_encoded.append(new_col)
+    else:
+        immutable_features_encoded.append(immutable)
+
+# Create new dataset object
+dataset_mcce = DatasetMCCE(immutables=immutables, 
+                           target=dataset.target,
+                           categorical=dataset.categorical,
+                           categorical_encoded=categorical_encoded,
+                           immutables_encoded=immutable_features_encoded,
+                           continuous=dataset.continuous,
+                           feature_order=ml_model.feature_input_order,
+                           encoder=dataset.encoder,
+                           scaler=dataset.scaler,
+                           inverse_transform=dataset.inverse_transform
+                           )
+
+                       
+#  Create dtypes for MCCE
+dtypes = dict([(x, "float") for x in dataset_mcce.continuous])
+for x in dataset_mcce.categorical_encoded:
     dtypes[x] = "category"
-df = (dataset.df).astype(dtypes)
+df = (df).astype(dtypes)
+
+print("Find unhappy customers and choose which ones to make counterfactuals for")
+factuals = predict_negative_instances(ml_model, df)
 
 print("Fit trees")
 start = time.time()
-mcce = MCCE(dataset=dataset,
+mcce = MCCE(dataset=dataset_mcce,
             model=ml_model)
 
-mcce.fit(df.drop(dataset.target, axis=1), dtypes)
+mcce.fit(df.drop(dataset_mcce.target, axis=1), dtypes)
 time_fit = time.time()
 
 if data_name == 'adult':
@@ -117,9 +180,13 @@ for n_test in N_TEST:
 
     test_factual = factuals.iloc[:n_test]
 
+    # Define new value for predicted target in test factual
+    test_factual[new_target] = np.ones(test_factual.shape[0])
+    test_factual[new_target] = test_factual[new_target].astype("category")
+
     time_n_start = time.time()
 
-    cfs = mcce.generate(test_factual.drop(y_col, axis=1), k=k)
+    cfs = mcce.generate(test_factual.drop(dataset_mcce.target, axis=1), k=k)
     time_generate = time.time()
 
     mcce.postprocess(cfs, test_factual, cutoff=0.5, higher_cardinality=False)
@@ -142,7 +209,7 @@ for n_test in N_TEST:
 
     results['prediction'] = ml_model.predict(results_copy)
 
-    cols = ['data', 'method', 'n_test', 'k'] + cat_feat_encoded.tolist() + cont_feat + ['time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']
+    cols = ['data', 'method', 'n_test', 'k'] + dataset_mcce.categorical_encoded + dataset_mcce.continuous + ['time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']
     results.sort_index(inplace=True)
 
     path_all = os.path.join(path, f"{data_name}_mcce_results_k_{k}_n_several_{device}.csv")

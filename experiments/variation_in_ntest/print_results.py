@@ -1,18 +1,16 @@
 import os
 import argparse
-import warnings
 import numpy as np
+import pandas as pd
+import warnings
 warnings.filterwarnings('ignore')
-
-from carla.data.catalog import OnlineCatalog
-from carla.models.catalog import MLModelCatalog
-from carla.models.negative_instances import predict_negative_instances
 
 import torch
 torch.manual_seed(0)
 
-import pandas as pd
-pd.set_option('display.max_columns', None)
+from carla.data.catalog import OnlineCatalog
+from carla.models.catalog import MLModelCatalog
+from carla.models.negative_instances import predict_negative_instances
 
 from mcce.metrics import distance, constraint_violation, feasibility, success_rate
 
@@ -36,7 +34,7 @@ parser.add_argument(
     "-k",
     "--k",
     type=int,
-    default=10000,
+    default=1000,
     help="Number of samples for each test observation.",
 )
 parser.add_argument(
@@ -45,21 +43,13 @@ parser.add_argument(
     action='store_true',  # default is False
     help="Whether to train the prediction model from scratch or not. Default will not train.",
 )
-parser.add_argument(
-    "-device",
-    "--device",
-    type=str,
-    default='cuda',
-    help="Whether the CARLA methods were trained with a GPU (default) or CPU.",
-)
 
 args = parser.parse_args()
 
 path = args.path
 data_name = args.dataset
-k = args.k
 force_train = args.force_train
-device = args.device # cuda # cpu
+k = args.k
 
 print(f"Load {data_name} data set")
 
@@ -95,15 +85,6 @@ elif data_name == 'compas':
     force_train=force_train,
     )
 
-if data_name == 'adult':
-    y = dataset.df_test['income']
-elif data_name == 'give_me_some_credit':
-    y = dataset.df_test['SeriousDlqin2yrs']
-elif data_name == 'compas':
-    y = dataset.df_test['score']
-
-pred = ml_model.predict_proba(dataset.df_test)
-pred = [row[1] for row in pred]
 factuals = predict_negative_instances(ml_model, dataset.df)
 
 if data_name == 'adult':
@@ -197,7 +178,7 @@ for method in ['mcce', 'cchvae']:
 cols = ['method', 'n_test', 'L0', 'L1', 'feasibility', 'success', 'violation', 'time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']
 temp = all_results[cols]
 
-print(f"Writing results for {data_name} {device}")
+print(f"Writing results for {data_name}")
 to_write_mean = temp[['method', 'n_test', 'L0', 'L1', 'feasibility', 'violation', 'success', 'time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)' ]].groupby(['method', 'n_test' ]).mean()
 to_write_mean.reset_index(inplace=True)
 

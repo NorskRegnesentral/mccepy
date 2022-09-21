@@ -28,14 +28,14 @@ parser.add_argument(
     "-n",
     "--number_of_samples",
     type=int,
-    default=100,
+    default=1000,
     help="Number of test observations to generate counterfactuals for.",
 )
 parser.add_argument(
     "-k",
     "--k",
     type=int,
-    default=10000,
+    default=1000,
     help="Number of observations to sample from each end node for MCCE method.",
 )
 parser.add_argument(
@@ -48,8 +48,8 @@ parser.add_argument(
     "-device",
     "--device",
     type=str,
-    default='cuda',
-    help="Whether the CARLA methods were trained with a GPU (default) or CPU.",
+    default='cpu',
+    help="Whether the CARLA methods were trained with a GPU or CPU.",
 )
 
 args = parser.parse_args()
@@ -99,15 +99,10 @@ hidden_size=[18, 9, 3],
 force_train=force_train,
 )
 
-y = dataset.df_test['income']
-
-pred = ml_model.predict_proba(dataset.df_test)
-pred = [row[1] for row in pred]
 factuals = predict_negative_instances(ml_model, dataset.df)
 test_factual = factuals.iloc[:100]
 
 print(f"Printing examples")
-
 try:
     cfs = pd.read_csv(os.path.join(path, f"adult_mcce_results_higher_cardinality_k_{k}_n_{n_test}_{device}.csv"), index_col=0)
 except:

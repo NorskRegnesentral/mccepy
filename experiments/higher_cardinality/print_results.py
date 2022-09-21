@@ -30,14 +30,14 @@ parser.add_argument(
     "-n",
     "--number_of_samples",
     type=int,
-    default=100,
+    default=1000,
     help="Number of test observations to generate counterfactuals for.",
 )
 parser.add_argument(
     "-k",
     "--k",
     type=int,
-    default=10000,
+    default=1000,
     help="Number of observations to sample from each end node for MCCE method.",
 )
 parser.add_argument(
@@ -50,8 +50,8 @@ parser.add_argument(
     "-device",
     "--device",
     type=str,
-    default='cuda',
-    help="Whether the CARLA methods were trained with a GPU (default) or CPU.",
+    default='cpu',
+    help="Whether the CARLA methods were trained with a GPU or CPU.",
 )
 
 args = parser.parse_args()
@@ -67,16 +67,14 @@ continuous = ["age", "fnlwgt", "education-num", "capital-gain", "hours-per-week"
 categorical = ["marital-status", "native-country", "occupation", "race", "relationship", "sex", "workclass"]
 immutables = ["age", "sex"]
 
-encoding_method = preprocessing.OneHotEncoder(
-            drop="first", sparse=False
-        )
+encoding_method = preprocessing.OneHotEncoder(drop="first", sparse=False)
 
 dataset = CsvCatalog(file_path="Data/train_not_normalized_data_from_carla.csv",
                      continuous=continuous,
                      categorical=categorical,
                      immutables=immutables,
                      target='income',
-                     encoding_method=encoding_method#"OneHot_drop_first", # New!
+                     encoding_method=encoding_method
                      )
 
 print("Fit predictive model")
@@ -95,15 +93,10 @@ hidden_size=[18, 9, 3],
 force_train=force_train,
 )
 
-y = dataset.df_test['income']
-
-pred = ml_model.predict_proba(dataset.df_test)
-pred = [row[1] for row in pred]
 factuals = predict_negative_instances(ml_model, dataset.df)
 test_factual = factuals.iloc[:n_test]
 
 print(f"Calculating results")
-
 try:
     cfs = pd.read_csv(os.path.join(path, f"adult_mcce_results_higher_cardinality_k_{k}_n_{n_test}_{device}.csv"), index_col=0)
 except:
@@ -126,7 +119,7 @@ counterfactuals_without_nans = output_counterfactuals.drop(index=nan_idx)
 
 # calculate metrics
 if len(counterfactuals_without_nans) > 0:
-    results = dataset.inverse_transform(counterfactuals_without_nans[factuals.columns])
+    results = dataset.inverse_transform(counterfactuals_without_nans) # [factuals.columns]
     results['method'] = 'mcce'
     results['data'] = 'adult'
     

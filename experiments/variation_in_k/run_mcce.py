@@ -130,7 +130,8 @@ for k in [5, 10, 25, 50, 100, 500, 1000, 5000, 10000, 25000]: # 500, 1000, 5000,
     results['method'] = 'mcce'
     results['n_test'] = n_test
     results['k'] = k
-    results['n_positive'] = results['N']
+    results['nb_unique_pos'] = results['nb_unique_pos']
+    results['nb_unique_samples'] = results['nb_unique_samples']
     
     # Count the number of unique synthesized rows per index
     # synth_df = mcce.synth_df.reset_index()
@@ -160,7 +161,7 @@ for k in [5, 10, 25, 50, 100, 500, 1000, 5000, 10000, 25000]: # 500, 1000, 5000,
 
     results['prediction'] = ml_model.predict(results_copy)
 
-    cols = ['data', 'method', 'n_test', 'k', 'n_positive'] + cat_feat_encoded.tolist() + cont_feat + ['time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']
+    cols = ['data', 'method', 'n_test', 'k', 'nb_unique_pos', 'nb_unique_samples'] + cat_feat_encoded.tolist() + cont_feat + ['time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']
     results.sort_index(inplace=True)
 
     path_all = os.path.join(path, f"{data_name}_mcce_results_k_several_n_{n_test}_{device}.csv")

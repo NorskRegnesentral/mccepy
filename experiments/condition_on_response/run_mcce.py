@@ -210,6 +210,7 @@ for k in [5, 10, 25, 50, 100, 500, 1000, 5000, 10000, 25000]:
     
     time_postprocess = time.time()
 
+    # Uncomment this if you want to save the trees to plot later!
     # import pickle
     # file_pi = open(os.path.join(path, "fnlwgt_fitted_tree.obj"), 'wb') 
     # pickle.dump(mcce.fitted_model['fnlwgt'], file_pi)
@@ -225,23 +226,25 @@ for k in [5, 10, 25, 50, 100, 500, 1000, 5000, 10000, 25000]:
     results['method'] = 'mcce'
     results['n_test'] = n_test
     results['k'] = k
-    results['n_positive'] = results['N']
+    results['nb_unique_pos'] = results['nb_unique_pos']
+    results['nb_unique_samples'] = results['synth_un_per_test']
+    
 
     # Get the fitted tree depth for each mutable feature
-    tree_depth_cols = []
-    for x in dataset_mcce.feature_order:
-        try:
-            results[x + "_tree_depth"] = mcce.fitted_model[x].get_depth()
-            tree_depth_cols.append(x + "_tree_depth")
-        except:
-            continue
+    # tree_depth_cols = []
+    # for x in dataset_mcce.feature_order:
+    #     try:
+    #         results[x + "_tree_depth"] = mcce.fitted_model[x].get_depth()
+    #         tree_depth_cols.append(x + "_tree_depth")
+    #     except:
+    #         continue
 
     results_copy = results.copy()
     results_copy[ml_model.feature_input_order] = results_copy[ml_model.feature_input_order].astype(float)
 
     results['prediction'] = ml_model.predict(results_copy)
 
-    cols = ['data', 'method', 'n_test', 'k', 'n_positive'] + dataset_mcce.categorical_encoded + dataset_mcce.continuous + tree_depth_cols + ['time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']
+    cols = ['data', 'method', 'n_test', 'k', 'nb_unique_pos', 'nb_unique_samples'] + dataset_mcce.categorical_encoded + dataset_mcce.continuous + ['time (seconds)', 'fit (seconds)', 'generate (seconds)', 'postprocess (seconds)']
     results.sort_index(inplace=True)
 
     path_all = os.path.join(path, f"{data_name}_mcce_results_k_several_n_{n_test}_{device}_MJ_{MJ}.csv")

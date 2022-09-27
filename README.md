@@ -4,14 +4,6 @@ Python package to generate counterfactuals using Monte Carlo sampling of realist
 
 ## Installation
 
-### From source
-
-```bash
-git clone git@github.com:NorskRegnesentral/mccepy.git
-cd mccepy
-pip install -r requirements.txt
-```
-
 ## Example
 
 For other examples (e.g., how to use MCCE with the CARLA package), see examples/.

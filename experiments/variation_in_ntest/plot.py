@@ -41,6 +41,13 @@ mcce = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_k_{k}_n_several
 
 cchvae = pd.read_csv(os.path.join(path, f"{data_name}_carla_results_n_several_cuda.csv"), index_col=0).groupby(['n_test']).mean()
 
+import numpy as np
+mcce['time (seconds)'] = np.log(mcce['time (seconds)'])
+mcce['fit (seconds)'] = np.log(mcce['fit (seconds)'])
+
+cchvae['time (seconds)'] = np.log(cchvae['time (seconds)'])
+cchvae['fitting (seconds)'] = np.log(cchvae['fitting (seconds)'])
+
 # plotting
 
 par = {'axes.titlesize':30}
@@ -50,23 +57,24 @@ plt.rcParams.update(par)
 fig, ax = plt.subplots(1, sharex=True, sharey=True)
 
 # plot lines
-ax.plot(cchvae.index, cchvae['time (seconds)'], label = "CCHVAE total", linestyle="-", marker='o', color='red')
-ax.plot(cchvae.index, cchvae['fitting (seconds)'], label = "CCHVAE fit", linestyle="-.", marker='o', color='red')
-ax.plot(cchvae.index, cchvae['sampling (seconds)'], label = "CCHVAE sampling", linestyle=":",  marker='o',color='red')
+ax.plot(cchvae.index, cchvae['time (seconds)'], label = "CCHVAE total", linestyle="-", marker='o', color='red', linewidth=3.0)
+ax.plot(cchvae.index, cchvae['fitting (seconds)'], label = "CCHVAE fit", linestyle="-.", marker='o', color='red', linewidth=3.0)
+# ax.plot(cchvae.index, cchvae['sampling (seconds)'], label = "CCHVAE sampling", linestyle=":",  marker='o',color='red')
 
-ax.plot(mcce.index, mcce['time (seconds)'], label = "MCCE total", linestyle="-", marker='o', color='blue')
-ax.plot(mcce.index, mcce['fit (seconds)'], label = "MCCE fit", linestyle="-.", marker='o', color='blue')
-ax.plot(mcce.index, mcce['generate (seconds)'], label = "MCCE sampling", linestyle=":", marker='o', color='blue')
-ax.plot(mcce.index, mcce['postprocess (seconds)'], label = "MCCE postprocess", linestyle="--", marker='o', color='blue')
+ax.plot(mcce.index, mcce['time (seconds)'], label = "MCCE total", linestyle="-", marker='o', color='blue', linewidth=3.0)
+ax.plot(mcce.index, mcce['fit (seconds)'], label = "MCCE fit", linestyle="-.", marker='o', color='blue', linewidth=3.0)
+# ax.plot(mcce.index, mcce['generate (seconds)'], label = "MCCE sampling", linestyle=":", marker='o', color='blue')
+# ax.plot(mcce.index, mcce['postprocess (seconds)'], label = "MCCE postprocess", linestyle="--", marker='o', color='blue')
 ax.legend(title_fontsize=100)
 
 ax.legend(prop={'size': 20})
 
-ax.set_ylabel("seconds", size=35)
-ax.set_xlabel("number of test observations", size=35)
+ax.set_ylabel("seconds", size=25)
+ax.set_xlabel("number of test observations", size=25)
+
 plt.yticks(fontsize=20)
 plt.xticks(fontsize=20)
 
 # plt.show()
 
-plt.savefig(f'{data_name}_variation_in_ntest_k_{k}.png')
+plt.savefig(f'{data_name}_variation_in_ntest_logscale_k_{k}.png')

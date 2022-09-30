@@ -4,10 +4,7 @@ from distutils.core import setup
 setup(
   name="mcce", 
   version="0.1.0",
-  author="Annabelle Redelmeier",
-  author_email="anr@nr.no",
   description="Python implementation of MCCE: Monte Carlo Generateing of Counterfactual Explanations",
-  url="https://github.com/NorskRegnesentral/mccepy",
   packages=find_packages(),
   classifiers=[
     "Programming Language :: Python :: 3",

@@ -1,4 +1,4 @@
-# mccepy
+# mccepy: Monte Carlo sampling of realistic Counterfactual Explanations for tabular data
 Python package to generate counterfactuals using Monte Carlo sampling of realistic counterfactual explanations.
 
 

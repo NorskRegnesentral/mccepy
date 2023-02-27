@@ -2,15 +2,23 @@ import os
 import time
 import argparse
 
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
+
 from carla.data.catalog import OnlineCatalog
 from carla.models.catalog import MLModelCatalog
 from carla.models.negative_instances import predict_negative_instances
 import carla.recourse_methods.catalog as recourse_catalog
 
-import ssl
-ssl._create_default_https_context = ssl._create_unverified_context
-
 import torch
+
+from carla import MLModel
+from carla.data.catalog import CsvCatalog
+
+from sklearn import preprocessing
+from sklearn import metrics
+from mcce.mcce import MCCE
+# must do pip install . in CARLA_version_2 directory
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -37,8 +45,8 @@ parser.add_argument(
     "-d",
     "--dataset",
     nargs="*",
-    default=["adult", "give_me_some_credit", "compas"],
-    choices=["adult", "give_me_some_credit", "compas"],
+    default=["german_credit"],
+    choices=["german_credit"],
     help="Datasets for experiment",
 )
 parser.add_argument(
@@ -84,7 +92,20 @@ path = args.path
 
 for data_name in args.dataset:
     print(f"Training data set: {data_name}")
-    dataset = OnlineCatalog(data_name)
+    categorical = ["Sex", "Job", "Housing", "Saving accounts", "Checking account", "Purpose"]
+    continuous = ["Age", "Credit amount", "Duration"]
+    immutable = ["Purpose", "Age", "Sex"]
+
+    encoding_method = preprocessing.OneHotEncoder(
+                drop="first", sparse=False
+            )
+    dataset = CsvCatalog(file_path="Data/german_credit_data_complete.csv",
+                        continuous=continuous,
+                        categorical=categorical,
+                        immutables=immutable,
+                        target='Risk',
+                        encoding_method=encoding_method
+                        )
 
     torch.manual_seed(0)
     
@@ -95,49 +116,31 @@ for data_name in args.dataset:
         backend="pytorch"
     )
 
-    if data_name == 'adult':
+    ml_model.train(
+    learning_rate=0.002,
+    epochs=20,
+    batch_size=1024,
+    hidden_size=[18, 9, 3],
+    force_train=force_train,
+    )
 
-        ml_model.train(
-        learning_rate=0.002,
-        epochs=20,
-        batch_size=1024,
-        hidden_size=[18, 9, 3],
-        force_train=force_train,
-        )
-    elif data_name == 'give_me_some_credit':
-        ml_model.train(
-        learning_rate=0.002,
-        epochs=20,
-        batch_size=2048,
-        hidden_size=[18, 9, 3],
-        force_train=force_train,
-        )
-    elif data_name == 'compas':
-        ml_model.train(
-        learning_rate=0.002,
-        epochs=25,
-        batch_size=25,
-        hidden_size=[18, 9, 3],
-        force_train=force_train, 
-        )
+    pred = ml_model.predict_proba(dataset.df_test)
+    pred = [row[1] for row in pred]
+    fpr, tpr, thresholds = metrics.roc_curve(dataset.df_test[dataset.target], pred, pos_label=1)
+    print(f"AUC of predictive model on out-of-sample test set: {round(metrics.auc(fpr, tpr), 2)}")
+
 
     factuals = predict_negative_instances(ml_model, dataset.df)
     test_factual = factuals.iloc[:n_test]
 
     nb_immutables = len(dataset.immutables)
 
-    if data_name == 'adult':
-        # recourse_methods = ["crud",
-        #                     "revise",
-        #                     "face"]
-        recourse_methods = ["cem-vae", "clue"] # "cchvae",
-    else:
-        recourse_methods = ["cchvae",
-                            "cem-vae",
-                            "clue",
-                            "crud",
-                            "revise",
-                            "face"]
+    recourse_methods = ["cchvae",
+                        "cem-vae",
+                        "clue",
+                        "crud",
+                        "revise",
+                        "face"]
 
 
     for rm in recourse_methods:
@@ -260,46 +263,46 @@ for data_name in args.dataset:
             df_cfs['time (seconds)'] = timing
             save_csv(df_cfs, data_name)
 
-        elif rm == 'cem-vae':
+        # elif rm == 'cem-vae':
 
-            start = time.time()
-            hyperparams = {
-                "data_name": dataset.name,
-                "batch_size": 1,
-                "kappa": 0.1,
-                "init_learning_rate": 0.01,
-                "binary_search_steps": 9,
-                "max_iterations": 100,
-                "initial_const": 10,
-                "beta": 0.9,
-                "gamma": 1.0, # 0.0, #   1.0
-                "mode": "PN",
-                "num_classes": 2,
-                "ae_params": {"hidden_layer": [20, 10, 7], "train_ae": True, "epochs": 5},
-            }
+        #     start = time.time()
+        #     hyperparams = {
+        #         "data_name": dataset.name,
+        #         "batch_size": 1,
+        #         "kappa": 0.1,
+        #         "init_learning_rate": 0.01,
+        #         "binary_search_steps": 9,
+        #         "max_iterations": 100,
+        #         "initial_const": 10,
+        #         "beta": 0.9,
+        #         "gamma": 1.0, # 0.0, #   1.0
+        #         "mode": "PN",
+        #         "num_classes": 2,
+        #         "ae_params": {"hidden_layer": [20, 10, 7], "train_ae": True, "epochs": 5},
+        #     }
 
-            from tensorflow import Graph, Session
+        #     from tensorflow import Graph, Session
 
-            graph = Graph()
-            with graph.as_default():
-                ann_sess = Session()
-                with ann_sess.as_default():
-                    ml_model_sess = MLModelCatalog(dataset, "ann", "tensorflow")
+        #     graph = Graph()
+        #     with graph.as_default():
+        #         ann_sess = Session()
+        #         with ann_sess.as_default():
+        #             ml_model_sess = MLModelCatalog(dataset, "ann", "tensorflow")
 
-                    factuals_sess = predict_negative_instances(
-                        ml_model_sess, dataset.df
-                    )
-                    factuals_sess = factuals_sess.iloc[:n_test].reset_index(drop=True)
+        #             factuals_sess = predict_negative_instances(
+        #                 ml_model_sess, dataset.df
+        #             )
+        #             factuals_sess = factuals_sess.iloc[:n_test].reset_index(drop=True)
 
-                    cem = recourse_catalog.CEM(ann_sess, ml_model_sess, hyperparams)
-                    df_cfs = cem.get_counterfactuals(factuals_sess)
+        #             cem = recourse_catalog.CEM(ann_sess, ml_model_sess, hyperparams)
+        #             df_cfs = cem.get_counterfactuals(factuals_sess)
                     
-                    df_cfs.index = test_factual.index
-                    df_cfs.insert(0, 'method', rm)
-                    df_cfs.insert(1, 'data', data_name)
-                    timing = time.time() - start
-                    df_cfs['time (seconds)'] = timing
-                    save_csv(df_cfs, data_name)
+        #             df_cfs.index = test_factual.index
+        #             df_cfs.insert(0, 'method', rm)
+        #             df_cfs.insert(1, 'data', data_name)
+        #             timing = time.time() - start
+        #             df_cfs['time (seconds)'] = timing
+        #             save_csv(df_cfs, data_name)
 
         elif rm == 'face':
             

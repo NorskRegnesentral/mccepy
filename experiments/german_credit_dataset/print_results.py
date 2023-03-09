@@ -100,9 +100,11 @@ force_train=force_train,
 
 factuals = predict_negative_instances(ml_model, dataset.df)
 test_factual = factuals.iloc[:n_test]
+# test_factual = pd.read_csv(os.path.join(path, f"german_credit_test_factuals_ann_model_k_{k}_n_{n_test}_{device}.csv"), index_col=0)
+
 
 all_results = pd.DataFrame()
-for method in ['cchvae', 'cem-vae', 'revise', 'clue', 'crud', 'face', 'mcce']:
+for method in [ 'cchvae', 'revise', 'clue', 'crud', 'face', 'mcce']: # 'cem-vae'
     print(f"Calculating results for {method}")
 
     if method == 'mcce':
@@ -121,13 +123,21 @@ for method in ['cchvae', 'cem-vae', 'revise', 'clue', 'crud', 'face', 'mcce']:
             continue
     
     df_cfs = cfs[cfs['method'] == method].drop(['method',	'data'], axis=1)
+    df_cfs = df_cfs.loc[~df_cfs.index.isnull()]
+    a = df_cfs.index.to_list()
+    df_cfs = df_cfs.set_index([pd.Index([int(a) for a in a])])
+
     # In case the script was accidentally run twice, we drop the duplicate indices per method
     df_cfs = df_cfs[~df_cfs.index.duplicated(keep='first')]
     
     df_cfs.sort_index(inplace=True)
     if dataset.target not in df_cfs.columns:
         df_cfs = df_cfs.join(test_factual[dataset.target])
-    
+    lst3 = [value for value in df_cfs.index.to_list() if value in test_factual.index.to_list()]
+
+    test_factual = test_factual.loc[lst3]
+    df_cfs = df_cfs.loc[lst3]
+
     # remove missing values
     nan_idx = df_cfs.index[df_cfs.isnull().any(axis=1)]
     non_nan_idx = df_cfs.index[~(df_cfs.isnull()).any(axis=1)]
@@ -137,7 +147,22 @@ for method in ['cchvae', 'cem-vae', 'revise', 'clue', 'crud', 'face', 'mcce']:
 
     factual_without_nans = output_factuals.drop(index=nan_idx)
     counterfactuals_without_nans = output_counterfactuals.drop(index=nan_idx)
+    
+    factual_without_nans = output_factuals.drop(index=nan_idx)
+    counterfactuals_without_nans = output_counterfactuals.drop(index=nan_idx)
 
+    for x in dataset.continuous:
+        factual_without_nans[x] = factual_without_nans[x].astype(float)
+        counterfactuals_without_nans[x] = counterfactuals_without_nans[x].astype(float)
+
+    cat_feat_encoded = dataset.encoder.get_feature_names(dataset.categorical)
+    for x in cat_feat_encoded:
+        factual_without_nans[x] = factual_without_nans[x].astype(float)
+        counterfactuals_without_nans[x] = counterfactuals_without_nans[x].astype(float)
+
+    factual_without_nans[dataset.target] = factual_without_nans[dataset.target].astype(float)
+    counterfactuals_without_nans[dataset.target] = counterfactuals_without_nans[dataset.target].astype(float)
+    
     # calculate metrics
     if len(counterfactuals_without_nans) > 0:
         results = dataset.inverse_transform(counterfactuals_without_nans) # [factuals.columns]
@@ -168,7 +193,7 @@ for method in ['cchvae', 'cem-vae', 'revise', 'clue', 'crud', 'face', 'mcce']:
         results['success'] = success_rate(counterfactuals_without_nans, ml_model, cutoff=0.5)
 
         # time
-        results['time (seconds)'] = df_cfs['time (seconds)'].mean() 
+        results['time (seconds)'] = df_cfs['time (seconds)'].astype('float').mean() 
 
         all_results = pd.concat([all_results, results], axis=0)
 

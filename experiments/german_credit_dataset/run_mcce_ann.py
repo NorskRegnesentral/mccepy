@@ -32,92 +32,6 @@ def weighted_binary_cross_entropy(target, output):
     return tf.negative(tf.reduce_mean(loss, axis=-1))
 
 # Fit predictive model that takes into account MLModel (a CARLA class!)
-class AnnModel(MLModel):
-    
-    def __init__(self, data, 
-                       dim_input,
-                       dim_hidden_layers,
-                       num_of_classes,
-                       data_name,):
-        super().__init__(data,)
-        
-        self.data_name = data_name
-        self.dim_input = dim_input
-        self.dim_hidden_layers = dim_hidden_layers
-        self.num_of_classes = num_of_classes
-
-        # get preprocessed data
-        df_train = self.data.df_train
-        df_test = self.data.df_test
-
-        x_train = df_train[self.data.continuous + self.data.encoder.get_feature_names(self.data.categorical).tolist()]
-        y_train = df_train[self.data.target]
-        x_test = df_test[self.data.continuous + self.data.encoder.get_feature_names(self.data.categorical).tolist()]
-        y_test = df_test[self.data.target]
-
-        # you can not only use the feature input order to
-        # order the data
-        self._feature_input_order = self.data.continuous + self.data.encoder.get_feature_names(self.data.categorical).tolist()
-
-        self._mymodel = Sequential()
-        for i, dim_layer in enumerate(dim_hidden_layers):
-            # first layer requires input dimension
-            if i == 0:
-                self._mymodel.add(
-                    Dense(
-                        units=dim_layer,
-                        input_dim=self.dim_input,
-                        activation="relu",
-                    )
-                )
-            else:
-                self._mymodel.add(Dense(units=dim_layer, activation="relu"))
-        # layer that does the classification
-        self._mymodel.add(Dense(units=self.num_of_classes, activation="softmax"))
-
-
-        self._mymodel.compile(
-            optimizer="rmsprop",  # works better than sgd
-            loss=weighted_binary_cross_entropy,
-            metrics=["accuracy"],
-        )
-        epochs = 5
-        batch_size = 1
-        self._mymodel.fit(
-            x_train,
-            to_categorical(y_train),
-            epochs=epochs,
-            shuffle=True,
-            batch_size=batch_size,
-            validation_data=(x_test, to_categorical(y_test)),
-        )
-
-
-    @property
-    def feature_input_order(self):
-        # List of the feature order the ml model was trained on
-        return self._feature_input_order
-
-    @property
-    def backend(self):
-        # The ML framework the model was trained on
-        return "torch"
-
-    @property
-    def raw_model(self):
-        # The black-box model object
-        return self._mymodel
-
-    # The predict function outputs
-    # the continuous prediction of the model
-    def predict(self, x):
-        return self._mymodel.predict_classes(self.get_ordered_features(x))
-
-    # The predict_proba method outputs
-    # the prediction as class probabilities
-    def predict_proba(self, x):
-        return self._mymodel.predict_proba(self.get_ordered_features(x))
-
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -184,12 +98,19 @@ ml_model = MLModelCatalog(
         backend="pytorch"
     )
 
+# ml_model.train(
+#     learning_rate=0.002,
+#     epochs=20,
+#     batch_size=1024,
+#     hidden_size=[18, 9, 3],
+#     force_train=force_train,
+#     )
 ml_model.train(
-    learning_rate=0.002,
-    epochs=20,
-    batch_size=1024,
-    hidden_size=[18, 9, 3],
-    force_train=force_train,
+        learning_rate=0.0005,
+        epochs=20,
+        batch_size=8, # 64
+        hidden_size=[81, 27, 3], # 64
+        force_train=force_train,
     )
 pred = ml_model.predict_proba(dataset.df_test)
 pred = [row[1] for row in pred]
@@ -198,7 +119,7 @@ print(f"AUC of predictive model on out-of-sample test set: {round(metrics.auc(fp
 
 print("Find factuals to generate counterfactuals for")
 factuals = predict_negative_instances(ml_model, dataset.df)
-print(f"Number of possible factuals: {factuals}")
+print(f"Number of possible factuals: {factuals.shape}")
 test_factual = factuals.iloc[:n_test]
 
 test_factual.to_csv(os.path.join(path, f"{data_name}_test_factuals_ann_model_k_{k}_n_{n_test}_{device}.csv"))

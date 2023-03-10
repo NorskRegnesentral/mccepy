@@ -1,5 +1,5 @@
 library(data.table)
-data <- fread("../MCCE_paper/mccepy/Data/german_credit_data.csv")
+data <- fread("Dropbox/pkg/MCCE_paper/mccepy/Data/german_credit_data.csv")
 data <- data[,2:ncol(data)]
 data[, .N, by = "Risk"][order(N)]
 
@@ -17,9 +17,11 @@ data[, Purpose := ifelse(Purpose == 'car', 1, 0)]
 data[, Risk := ifelse(Risk == 'bad', 1, 0)]
 data[, Job := ifelse(Job == '2', 1, 0)]
 
-fwrite(data, "../MCCE_paper/mccepy/Data/german_credit_data_complete.csv")
+data[, .N, by = "Risk"][order(N)]
 
-fico <- fread("../MCCE_paper/mccepy/Data/heloc_dataset_v1.csv")
+# fwrite(data, "Dropbox/pkg/MCCE_paper/mccepy/Data/german_credit_data_complete.csv")
+
+fico <- fread("Dropbox/pkg/MCCE_paper/mccepy/Data/heloc_dataset_v1.csv")
 fico <- fico[complete.cases(fico), ]
 setnames(fico, "RiskPerformance", "Risk")
 fico[, Risk := ifelse(Risk == 'Bad', 1, 0)]
@@ -30,4 +32,4 @@ for(i in cols){
   fico <- fico[get(i) != -9]
 }
 
-fwrite(fico, "../MCCE_paper/mccepy/Data/fico_data_complete.csv")
+fwrite(fico, "Dropbox/pkg/MCCE_paper/mccepy/Data/fico_data_complete.csv")

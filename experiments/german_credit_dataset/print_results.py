@@ -91,22 +91,21 @@ ml_model = MLModelCatalog(
         backend="pytorch"
     )
 ml_model.train(
-learning_rate=0.002,
-epochs=20,
-batch_size=1024,
-hidden_size=[18, 9, 3],
-force_train=force_train,
-)
+        learning_rate=0.0005,
+        epochs=20,
+        batch_size=8, # 64
+        hidden_size=[81, 27, 3], # 64
+        force_train=force_train,
+    )
 
 factuals = predict_negative_instances(ml_model, dataset.df)
 test_factual = factuals.iloc[:n_test]
-# test_factual = pd.read_csv(os.path.join(path, f"german_credit_test_factuals_ann_model_k_{k}_n_{n_test}_{device}.csv"), index_col=0)
-
 
 all_results = pd.DataFrame()
-for method in [ 'cchvae', 'revise', 'clue', 'crud', 'face', 'mcce']: # 'cem-vae'
-    print(f"Calculating results for {method}")
+for method in ['cchvae', 'revise', 'clue', 'crud', 'face', 'mcce']: # 'cem-vae'
+    test_factual = pd.read_csv(os.path.join(path, f"german_credit_test_factuals_ann_model_k_{k}_n_{n_test}_{device}.csv"), index_col=0)
 
+    print(f"Calculating results for {method}")
     if method == 'mcce':
         try:
             cfs = pd.read_csv(os.path.join(path, f"{data_name}_mcce_results_ann_model_k_{k}_n_{n_test}_{device}.csv"), index_col=0)
@@ -114,8 +113,6 @@ for method in [ 'cchvae', 'revise', 'clue', 'crud', 'face', 'mcce']: # 'cem-vae'
             print(f"No {method} results saved for n_test {n_test} in {path}")
             continue
     else:
-        print(os.path.join(path, f"{data_name}_carla_results_n_{n_test}_{device}.csv"))
-        
         try:
             cfs = pd.read_csv(os.path.join(path, f"{data_name}_carla_results_n_{n_test}_{device}.csv"), index_col=0)
         except:
@@ -126,7 +123,7 @@ for method in [ 'cchvae', 'revise', 'clue', 'crud', 'face', 'mcce']: # 'cem-vae'
     df_cfs = df_cfs.loc[~df_cfs.index.isnull()]
     a = df_cfs.index.to_list()
     df_cfs = df_cfs.set_index([pd.Index([int(a) for a in a])])
-
+    print(df_cfs.shape)
     # In case the script was accidentally run twice, we drop the duplicate indices per method
     df_cfs = df_cfs[~df_cfs.index.duplicated(keep='first')]
     
@@ -134,7 +131,7 @@ for method in [ 'cchvae', 'revise', 'clue', 'crud', 'face', 'mcce']: # 'cem-vae'
     if dataset.target not in df_cfs.columns:
         df_cfs = df_cfs.join(test_factual[dataset.target])
     lst3 = [value for value in df_cfs.index.to_list() if value in test_factual.index.to_list()]
-
+    print(len(lst3))
     test_factual = test_factual.loc[lst3]
     df_cfs = df_cfs.loc[lst3]
 
@@ -147,10 +144,7 @@ for method in [ 'cchvae', 'revise', 'clue', 'crud', 'face', 'mcce']: # 'cem-vae'
 
     factual_without_nans = output_factuals.drop(index=nan_idx)
     counterfactuals_without_nans = output_counterfactuals.drop(index=nan_idx)
-    
-    factual_without_nans = output_factuals.drop(index=nan_idx)
-    counterfactuals_without_nans = output_counterfactuals.drop(index=nan_idx)
-
+    print(counterfactuals_without_nans.shape)
     for x in dataset.continuous:
         factual_without_nans[x] = factual_without_nans[x].astype(float)
         counterfactuals_without_nans[x] = counterfactuals_without_nans[x].astype(float)
@@ -165,6 +159,7 @@ for method in [ 'cchvae', 'revise', 'clue', 'crud', 'face', 'mcce']: # 'cem-vae'
     
     # calculate metrics
     if len(counterfactuals_without_nans) > 0:
+        print(f"Calculating results for {method}")
         results = dataset.inverse_transform(counterfactuals_without_nans) # [factuals.columns]
         results['method'] = method
         results['data'] = data_name

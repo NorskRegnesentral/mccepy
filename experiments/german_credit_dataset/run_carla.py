@@ -1,7 +1,6 @@
 import os
 import time
 import argparse
-
 import pandas as pd
 
 import ssl
@@ -47,8 +46,8 @@ parser.add_argument(
     "-d",
     "--dataset",
     nargs="*",
-    default=["fico"],
-    choices=["fico"],
+    default=["german_credit"],
+    choices=["german_credit"],
     help="Datasets for experiment",
 )
 parser.add_argument(
@@ -56,16 +55,16 @@ parser.add_argument(
     "--recourse_method",
     nargs="*",
     default=[
-        "cchvae",
-        # "cem-vae",
+        # "cchvae",
+        "cem-vae",
         "clue",
         "crud",
         "revise",
         "face"
     ],
     choices=[
-        "cchvae",
-        # "cem-vae",
+        # "cchvae",
+        "cem-vae",
         "clue",
         "crud",
         "revise",
@@ -77,7 +76,7 @@ parser.add_argument(
     "-n",
     "--number_of_samples",
     type=int,
-    default=1000,
+    default=100,
     help="Number of instances per dataset",
 )
 parser.add_argument(
@@ -95,23 +94,14 @@ k = 1000
 
 for data_name in args.dataset:
     print(f"Training data set: {data_name}")
-    categorical = []
-    continuous = ["ExternalRiskEstimate", "MSinceOldestTradeOpen",
-    "MSinceMostRecentTradeOpen", "AverageMInFile", "NumSatisfactoryTrades",
-    "NumTrades60Ever2DerogPubRec", "NumTrades90Ever2DerogPubRec", 
-    "PercentTradesNeverDelq", "MSinceMostRecentDelq", "MaxDelq2PublicRecLast12M",
-    "MaxDelqEver", "NumTotalTrades", "NumTradesOpeninLast12M", 
-    "PercentInstallTrades", "MSinceMostRecentInqexcl7days", 
-    "NumInqLast6M", "NumInqLast6Mexcl7days", "NetFractionRevolvingBurden",
-    "NetFractionInstallBurden", "NumRevolvingTradesWBalance", 
-    "NumInstallTradesWBalance", "NumBank2NatlTradesWHighUtilization",
-    "PercentTradesWBalance"]
-    immutable = ["ExternalRiskEstimate"]
+    categorical = ["Sex", "Job", "Housing", "Saving accounts", "Checking account", "Purpose"]
+    continuous = ["Age", "Credit amount", "Duration"]
+    immutable = ["Purpose", "Age", "Sex"]
 
     encoding_method = preprocessing.OneHotEncoder(
                 drop="first", sparse=False
             )
-    dataset = CsvCatalog(file_path="Data/fico_data_complete.csv",
+    dataset = CsvCatalog(file_path="Data/german_credit_data_complete.csv",
                         continuous=continuous,
                         categorical=categorical,
                         immutables=immutable,
@@ -128,12 +118,12 @@ for data_name in args.dataset:
         backend="pytorch"
     )
 
-    ml_model.train( # this get's an AUC of 0.81
-    learning_rate=0.002,
-    epochs=20,
-    batch_size=16, # 64
-    hidden_size=[81, 16, 3], # 64
-    force_train=force_train,
+    ml_model.train(
+        learning_rate=0.0005,
+        epochs=20,
+        batch_size=8, # 64
+        hidden_size=[81, 27, 3], # 64
+        force_train=force_train,
     )
 
     pred = ml_model.predict_proba(dataset.df_test)
@@ -145,17 +135,17 @@ for data_name in args.dataset:
     factuals = predict_negative_instances(ml_model, dataset.df)
     test_factual = factuals.iloc[:n_test]
     # Read in factuals from MCCE since model is not reproducible! 
-    test_factual = pd.read_csv(os.path.join(path, f"fico_test_factuals_ann_model_k_{k}_n_{n_test}_{device}.csv"), index_col=0)
+    test_factual = pd.read_csv(os.path.join(path, f"german_credit_test_factuals_ann_model_k_{k}_n_{n_test}_{device}.csv"), index_col=0)
+
 
     nb_immutables = len(dataset.immutables)
 
     recourse_methods = [
                         "cchvae",
-                        # "cem-vae",
-                        "clue",
-                        "crud",
-                        # "revise",
-                        "face"
+                        # "clue",
+                        # "crud",
+                        "revise",
+                        # "face"
                         ]
 
 
@@ -228,7 +218,7 @@ for data_name in args.dataset:
 
             start = time.time()
             hyperparams = {
-                "data_name": dataset.name,
+                "data_name": dataset.name, # this get's non NA for 10/10
                 "target_class": [0, 1],
                 "lambda_param": 0.001,
                 "optimizer": "RMSprop",
@@ -239,11 +229,10 @@ for data_name in args.dataset:
                     "layers": [len(ml_model.feature_input_order)-nb_immutables, 16, 8],
                     "train": True,
                     "epochs": 5,
-                    "lr": 1e-3,
-                    "batch_size": 32,
+                    "lr": 0.0001,
+                    "batch_size": 4,
                 },
             }
-
             crud = recourse_catalog.CRUD(ml_model, hyperparams)
             df_cfs = crud.get_counterfactuals(test_factual)
 
@@ -257,14 +246,14 @@ for data_name in args.dataset:
         elif rm == 'clue':
 
             start = time.time()
-            hyperparams = { # this get's non NA cfs for at n = 10
+            hyperparams = { # this get's non-NA for 2/10
                 "data_name": dataset.name,
                 "train_vae": True,
                 "width": 10,
                 "depth": 3, 
                 "latent_dim": 12, 
-                "batch_size": 16, # 64
-                "epochs": 1, 
+                "batch_size": 4, # 64
+                "epochs": 20, 
                 "lr": 0.0005, # 0.001
                 "early_stop": 10,
             }
@@ -323,10 +312,10 @@ for data_name in args.dataset:
         elif rm == 'face':
             
             start = time.time()
-            hyperparams = {
+            hyperparams = { # this get's non NA for 100/100
                 "data_name": dataset.name,
                 "mode": "knn",
-                "fraction": 0.15
+                "fraction": 0.75
             }
 
             face = recourse_catalog.Face(ml_model, hyperparams)

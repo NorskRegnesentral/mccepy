@@ -49,7 +49,7 @@ parser.add_argument(
     "-k",
     "--k",
     type=int,
-    default=10000,
+    default=1000,
     help="Number of test observations to generate counterfactuals for.",
 )
 parser.add_argument(
@@ -94,10 +94,6 @@ dataset = CsvCatalog(file_path="Data/fico_data_complete.csv",
                      encoding_method=encoding_method
                      )
 
-print(dataset.df)
-
-# ml_model = AnnModel(dataset, dim_input=9, dim_hidden_layers=[20, 10, 7], num_of_classes=2, data_name="German Credit")
-
 ml_model = MLModelCatalog(
         dataset, 
         model_type="ann", 
@@ -105,13 +101,14 @@ ml_model = MLModelCatalog(
         backend="pytorch"
     )
 
-ml_model.train(
+ml_model.train( # this get's an AUC of 0.81
     learning_rate=0.002,
     epochs=20,
-    batch_size=1024,
-    hidden_size=[18, 9, 3],
-    force_train=True,
+    batch_size=16, # 64
+    hidden_size=[81, 16, 3], # 64
+    force_train=force_train,
     )
+
 pred = ml_model.predict_proba(dataset.df_test)
 pred = [row[1] for row in pred]
 fpr, tpr, thresholds = metrics.roc_curve(dataset.df_test[dataset.target], pred, pos_label=1)
@@ -119,9 +116,10 @@ print(f"AUC of predictive model on out-of-sample test set: {round(metrics.auc(fp
 
 print("Find factuals to generate counterfactuals for")
 factuals = predict_negative_instances(ml_model, dataset.df)
-print(f"Number of possible factuals: {factuals}")
+print(f"Number of possible factuals: {factuals.shape}")
 test_factual = factuals.iloc[:n_test]
 
+print(os.path.join(path, f"{data_name}_test_factuals_ann_model_k_{k}_n_{n_test}_{device}.csv"))
 test_factual.to_csv(os.path.join(path, f"{data_name}_test_factuals_ann_model_k_{k}_n_{n_test}_{device}.csv"))
 
 print("Prepare data for MCCE")
